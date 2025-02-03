@@ -3,6 +3,8 @@
 
 Create and manage Solana Tokens with ease using our Token Manager or write and deploy Ethereum contracts using our simple script.
 
+Best part, only fees you pay are the network fees!
+
 **Donations:** If you find this script helpful, please consider sending a tip to setec.sol on Solana. Your support helps us keep building!
 
 **GitHub Repository:** https://github.com/DigijEth/SetecGamingTokenManager

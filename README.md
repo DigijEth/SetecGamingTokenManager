@@ -5,12 +5,7 @@
 
 **GitHub Repository:** https://github.com/DigijEth/Solena-anti-bot-Token
 
-For Window 11 with a GUI please see the win11 folder.
-
-For Fedora 38 and 39 please check the fedora folder
-
-For MacOS check the Sequoia folder.
-etc etc. Only the Debian script is supported. If you would like to help develop the script for other platforms, please let me know!
+This script should work on most debian based linux distros.
 
 ------------------------------------------------------------------
 

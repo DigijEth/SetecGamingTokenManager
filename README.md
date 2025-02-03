@@ -3,7 +3,7 @@
 
 **Donations:** If you find this script helpful, please consider sending a tip to setec.sol on Solana. Your support helps us keep building!
 
-**GitHub Repository:** https://github.com/DigijEth/Solena-anti-bot-Token
+**GitHub Repository:** https://github.com/DigijEth/SetecGamingTokenManager
 
 This script should work on most debian based linux distros.
 

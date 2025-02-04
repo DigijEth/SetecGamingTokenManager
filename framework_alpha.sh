@@ -2482,3 +2482,134 @@ manage_bridge_liquidity() {
     fi
 }
 
+###############################################################################
+# Menu Display Functions
+###############################################################################
+get_menu_title() {
+    local idx=$1
+    case $idx in
+        1)  echo "Setup Environment" ;;
+        2)  echo "Wallet Management" ;;
+        3)  echo "Token Creator" ;;
+        4)  echo "Token Manager" ;;
+        5)  echo "NFT Creator" ;;
+        6)  echo "Smart Contract Manager" ;;
+        7)  echo "Advanced Options" ;;
+        8)  echo "Trading & Bot Management" ;;
+        9)  echo "Source Code Manager" ;;
+        10) echo "Documentation Generator" ;;
+        11) echo "Contract Upgrade Tools" ;;
+        12) echo "Custom Token Standards" ;;
+        13) echo "Cross-chain Bridge" ;;
+        14) echo "Security Center" ;;
+        15) echo "Analytics Dashboard" ;;
+        *) echo "" ;;
+    esac
+}
+
+get_menu_tooltip() {
+    local idx=$1
+    case $idx in
+        1)  echo "Configure environment and dependencies" ;;
+        2)  echo "Manage wallets and connections" ;;
+        3)  echo "Create and configure new tokens" ;;
+        4)  echo "Manage existing tokens" ;;
+        5)  echo "Create and manage NFTs" ;;
+        6)  echo "Deploy and manage smart contracts" ;;
+        7)  echo "Advanced protocol features" ;;
+        8)  echo "Trading bots and automation" ;;
+        9)  echo "Manage contract source code" ;;
+        10) echo "Generate documentation" ;;
+        11) echo "Upgrade contract tools" ;;
+        12) echo "Custom token standard tools" ;;
+        13) echo "Cross-chain bridge operations" ;;
+        14) echo "Security and access control" ;;
+        15) echo "View analytics and metrics" ;;
+        *) echo "" ;;
+    esac
+}
+
+display_menu_item() {
+    local number=$1
+    local title
+    title=$(get_menu_title "$number")
+    if [ -n "$title" ]; then
+        printf "%-2s. %-30s" "$number" "$title"
+    fi
+}
+
+display_menu_tooltip() {
+    local number=$1
+    local tooltip
+    tooltip=$(get_menu_tooltip "$number")
+    if [ -n "$tooltip" ]; then
+        printf "    %-30s" "$tooltip"
+    fi
+}
+
+display_menu_row() {
+    local start_idx=$1
+    # Display menu items
+    display_menu_item "$start_idx"
+    display_menu_item "$((start_idx+1))"
+    display_menu_item "$((start_idx+2))"
+    echo
+    # Display tooltips
+    display_menu_tooltip "$start_idx"
+    display_menu_tooltip "$((start_idx+1))"
+    display_menu_tooltip "$((start_idx+2))"
+    echo
+    echo
+}
+
+main_menu() {
+    while true; do
+        print_header
+        echo "Setec's Labs: Solana AIO Token Manager"
+        echo "Type M at any submenu to return here."
+        echo
+        
+        # Calculate page bounds
+        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
+        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
+        
+        # Display menu in 3 columns, 5 rows per page
+        for ((i=start_idx; i<=end_idx; i+=3)); do
+            display_menu_row "$i"
+        done
+        
+        # Navigation options
+        echo -e "N. Next Page    P. Previous Page    Q. Quit"
+        echo
+        
+        read -p "Enter your choice: " main_choice
+        case "$main_choice" in
+            [Nn]) 
+                if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
+                    ((CURRENT_PAGE++))
+                fi
+                ;;
+            [Pp])
+                if ((CURRENT_PAGE > 1)); then
+                    ((CURRENT_PAGE--))
+                fi
+                ;;
+            1) setup_environment_menu ;;
+            2) wallet_management_menu ;;
+            3) token_creator_menu ;;
+            4) token_manager_menu ;;
+            5) nft_creator_menu ;;          # New
+            6) smart_contract_menu ;;       # New
+            7) advanced_options_menu ;;
+            8) trading_menu ;;
+            9) source_code_menu ;;          # New
+            10) documentation_menu ;;       # New
+            11) upgrade_menu ;;             # New
+            12) custom_token_menu ;;        # New
+            13) bridge_menu ;;              # New
+            [Qq]) echo "Exiting..."; exit 0 ;;
+            *) echo "Invalid selection." ; sleep 1 ;;
+        esac
+    done
+}
+

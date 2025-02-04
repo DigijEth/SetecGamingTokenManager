@@ -27,12 +27,6 @@ check_dependency() {
 # Initialize missing dependencies array
 declare -a MISSING_DEPS=()
 
-# Create check file to prevent repeated checks
-if [ ! -f "$DEPENDENCY_FILE" ]; then
-    # Dependency check logic here
-    touch "$DEPENDENCY_FILE"
-fi
-
 # Remove initial dependency check section and move it to dependency_menu function
 # ...existing code until first dependency check...
 
@@ -123,6 +117,7 @@ install_metaplex() {
             echo "Error: Failed to install Metaplex (Sugar)." >&2
             exit 1
         fi
+        echo -e "${GREEN}Metaplex CLI installed successfully.${NC}"
     else
         echo -e "${GREEN}Metaplex CLI already installed.${NC}"
     fi

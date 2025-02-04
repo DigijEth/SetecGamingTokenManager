@@ -1,6 +1,8 @@
-**Update:** In the latest release, anti-bot features have been removed from token creation. This is only temporary as we add some new features and update our Metaplex functions. I apologize for the inconvenience.
+**Update:** We are currently working on adding easy contract creation. The tool now supports Eth, BSC, Solana and Polygon. If there is a network you would like me to add, please create a issue.
 
-If framework.sh gives you an error, please try framework_rc.sh
+Multilingual support coming soon.
+
+Please create a issue ticket for any problems. If you would like a custom version made, please reach out to use on the website.
 
 **Setec Gaming Lab's
 – All-In-One Token Creator**

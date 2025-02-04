@@ -578,6 +578,301 @@ token_creator_menu() {
 
     display_fee_warning "Solana Network" "$SOLANA_FEE_URL" || return
 
+    echo "Select Creation Mode:"
+    echo "1. (W)izard - Recommended for beginners"
+    echo "2. (S)tandard Menu - Advanced users"
+    read -p "Enter choice (W/S): " mode_choice
+
+    case "${mode_choice,,}" in
+        w|1) token_creator_wizard ;;
+        s|2) token_creator_standard ;;
+        *) echo "Invalid selection" ; sleep 1 ;;
+    esac
+}
+
+create_deploy_script() {
+    local token_dir="$1"
+    local token_name="$2"
+    local token_symbol="$3"
+    local decimals="$4"
+    local total_supply="$5"
+    local fee_payer="$6"
+
+    cat > "$token_dir/deploy.sh" << EOF
+#!/bin/bash
+# Deploy script for $token_name ($token_symbol)
+# Created: $(date)
+
+# Create token
+echo "Creating token $token_name..."
+TOKEN_MINT=\$(spl-token create-token --decimals $decimals --fee-payer $fee_payer | grep "Creating token" | awk '{print \$3}')
+
+echo "Token mint address: \$TOKEN_MINT"
+
+# Create token account
+echo "Creating token account..."
+TOKEN_ACCOUNT=\$(spl-token create-account \$TOKEN_MINT --fee-payer $fee_payer | grep "Creating account" | awk '{print \$3}')
+
+# Mint initial supply
+echo "Minting initial supply..."
+spl-token mint \$TOKEN_MINT $total_supply \$TOKEN_ACCOUNT --fee-payer $fee_payer
+
+echo "Token deployment complete!"
+echo "Token Mint: \$TOKEN_MINT"
+echo "Token Account: \$TOKEN_ACCOUNT"
+EOF
+
+    chmod +x "$token_dir/deploy.sh"
+}
+
+show_progress_bar() {
+    local duration="$1"
+    local message="$2"
+    local width=50
+    local interval=0.5
+    local progress=0
+    
+    while [ $progress -le $duration ]; do
+        local percentage=$((progress * 100 / duration))
+        local filled=$((percentage * width / 100))
+        local unfilled=$((width - filled))
+        
+        printf "\r%s [%s%s] %d%%" "$message" \
+            "$(printf "#%.0s" $(seq 1 $filled))" \
+            "$(printf " %.0s" $(seq 1 $unfilled))" \
+            "$percentage"
+        
+        sleep $interval
+        progress=$((progress + 1))
+    done
+    echo
+}
+
+token_creator_wizard() {
+    print_header
+    echo "Token Creation Wizard"
+    echo "-------------------"
+    echo "Welcome! This wizard will guide you through creating your token step by step."
+    echo "Press Enter to continue..."
+    read
+
+    # Token Name
+    while true; do
+        print_header
+        echo "Step 1: Token Name"
+        echo "----------------"
+        echo "Enter the name for your token. This should be something memorable and relevant."
+        echo "Example: 'My Game Token' or 'Super Coin'"
+        echo
+        read -p "Token name: " TOKEN_NAME
+        echo
+        read -p "Confirm '$TOKEN_NAME' as your token name? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
+    # Token Symbol
+    while true; do
+        print_header
+        echo "Step 2: Token Symbol"
+        echo "-----------------"
+        echo "Enter a short symbol for your token (2-5 characters recommended)."
+        echo "Example: 'BTC' for Bitcoin or 'ETH' for Ethereum"
+        echo
+        read -p "Token symbol: " TOKEN_SYMBOL
+        echo
+        read -p "Confirm '$TOKEN_SYMBOL' as your token symbol? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
+    # Decimals
+    while true; do
+        print_header
+        echo "Step 3: Token Decimals"
+        echo "-------------------"
+        echo "Enter the number of decimal places for your token (0-9 recommended)."
+        echo "Common choices:"
+        echo "6 - Standard for most tokens (like SOL)"
+        echo "9 - Higher precision"
+        echo "2 - For tokens representing cents/dollars"
+        echo
+        read -p "Decimals (default: 6): " DECIMALS
+        DECIMALS=${DECIMALS:-6}
+        echo
+        read -p "Confirm $DECIMALS decimal places? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
+    # Total Supply
+    while true; do
+        print_header
+        echo "Step 4: Total Supply"
+        echo "-----------------"
+        echo "Enter the total number of tokens to create."
+        echo "Examples:"
+        echo "1000000 - One million tokens"
+        echo "21000000 - Like Bitcoin's supply"
+        echo "1000000000 - One billion tokens"
+        echo
+        read -p "Total supply: " TOTAL_SUPPLY
+        echo
+        read -p "Confirm supply of $TOTAL_SUPPLY tokens? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
+    # Select Wallet
+    print_header
+    echo "Step 5: Wallet Selection"
+    echo "----------------------"
+    WALLET_DIR="$HOME/.config/solana"
+    WALLETS=( "$WALLET_DIR"/*.json )
+    echo "Available wallets:"
+    for i in "${!WALLETS[@]}"; do
+        addr=$(solana address -k "${WALLETS[$i]}" 2>/dev/null | tr -d '[:space:]')
+        echo "$((i+1)). ${WALLETS[$i]} ($addr)"
+    done
+    read -p "Select wallet number: " wallet_choice
+    wallet_index=$((wallet_choice - 1))
+    FEE_PAYER="${WALLETS[$wallet_index]}"
+
+    # Create Token Directory and Contract
+    TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
+    mkdir -p "$TOKEN_DIR"
+    
+    # Generate Token Contract
+    save_source_code "token" "$TOKEN_NAME"
+    
+    # Create deploy script
+    create_deploy_script "$TOKEN_DIR" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$DECIMALS" "$TOTAL_SUPPLY" "$FEE_PAYER"
+
+    # Metadata
+    print_header
+    echo "Step 6: Token Metadata"
+    echo "-------------------"
+    echo "Would you like to add metadata to your token?"
+    echo "This includes description, image, and social links."
+    echo "Note: Metaplex fees will apply"
+    read -p "Add metadata? (y/n): " CREATE_METADATA
+
+    if [[ "$CREATE_METADATA" == "y" ]]; then
+        # Creator Details
+        while true; do
+            print_header
+            echo "Creator Information"
+            echo "------------------"
+            echo "Enter your name or organization name"
+            echo "Example: 'Super Games Inc' or 'John Doe'"
+            read -p "Creator name: " CREATOR_NAME
+            echo
+            read -p "Confirm '$CREATOR_NAME' as creator name? (y/n): " confirm
+            [[ "$confirm" == "y" ]] && break
+        done
+
+        # Website
+        while true; do
+            print_header
+            echo "Project Website"
+            echo "---------------"
+            echo "Enter your project's website URL"
+            echo "Example: 'https://mytoken.com'"
+            read -p "Website: " CREATOR_WEBSITE
+            echo
+            read -p "Confirm '$CREATOR_WEBSITE' as website? (y/n): " confirm
+            [[ "$confirm" == "y" ]] && break
+        done
+
+        # Description
+        while true; do
+            print_header
+            echo "Token Description"
+            echo "----------------"
+            echo "Enter a detailed description of your token"
+            echo "Example: 'The official currency of Super Games Inc'"
+            read -p "Description: " TOKEN_DESC
+            echo
+            read -p "Confirm this description? (y/n): " confirm
+            [[ "$confirm" == "y" ]] && break
+        done
+
+        # Create metadata JSON
+        generate_metadata_json "$TOKEN_DIR" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$TOKEN_DESC" "$CREATOR_WEBSITE" "$CREATOR_NAME"
+    fi
+
+    # Authority Revocation
+    print_header
+    echo "Step 7: Authority Settings"
+    echo "------------------------"
+    echo "These settings determine what control you retain over the token"
+    echo
+    echo "Freeze Authority:"
+    echo "- Allows freezing token accounts"
+    echo "- Recommended: Revoke for fully decentralized tokens"
+    read -p "Revoke freeze authority? (y/n): " REVOKE_FREEZE
+    echo
+    echo "Mint Authority:"
+    echo "- Allows creating more tokens"
+    echo "- Revoke for fixed supply tokens"
+    read -p "Revoke mint authority? (y/n): " REVOKE_MINT
+    echo
+    echo "Update Authority:"
+    echo "- Allows updating metadata"
+    echo "- Revoke to make metadata permanent"
+    read -p "Revoke update authority? (y/n): " REVOKE_UPDATE
+
+    # Deployment
+    print_header
+    echo "Final Step: Deployment"
+    echo "--------------------"
+    echo "Ready to deploy your token!"
+    echo "Summary:"
+    echo "- Name: $TOKEN_NAME"
+    echo "- Symbol: $TOKEN_SYMBOL"
+    echo "- Supply: $TOTAL_SUPPLY"
+    echo "- Decimals: $DECIMALS"
+    echo
+    read -p "Deploy now? (y/n): " deploy_now
+
+    if [[ "$deploy_now" == "y" ]]; then
+        echo "Deploying token..."
+        sh "$TOKEN_DIR/deploy.sh"
+        
+        show_progress_bar 45 "Waiting for confirmation"
+        
+        if [[ "$CREATE_METADATA" == "y" ]]; then
+            echo "Updating metadata..."
+            metaplex update_metadata --mint "$TOKEN_MINT" --metadata "$TOKEN_DIR/metadata.json" --keypair "$FEE_PAYER"
+            show_progress_bar 45 "Waiting for metadata update"
+        fi
+        
+        # Apply authority revocations
+        if [[ "$REVOKE_FREEZE" == "y" ]]; then
+            spl-token authorize "$TOKEN_MINT" freeze --disable --fee-payer "$FEE_PAYER"
+        fi
+        if [[ "$REVOKE_MINT" == "y" ]]; then
+            spl-token authorize "$TOKEN_MINT" mint --disable --fee-payer "$FEE_PAYER"
+        fi
+        if [[ "$REVOKE_UPDATE" == "y" ]]; then
+            metaplex update_metadata --mint "$TOKEN_MINT" --new-update-authority null --keypair "$FEE_PAYER"
+        fi
+        
+        echo -e "${GREEN}Token creation complete!${NC}"
+        echo "Token Directory: $TOKEN_DIR"
+        echo "Token Mint Address: $TOKEN_MINT"
+    else
+        echo "Deployment script saved to: $TOKEN_DIR/deploy.sh"
+        echo "Run this script when you're ready to deploy"
+    fi
+    
+    read -p "Press Enter to return to menu..."
+}
+
+# Rename existing token creator function to token_creator_standard
+token_creator_standard() {
+    print_header
+    echo "Token Creator"
+    echo "-------------"
+
+    display_fee_warning "Solana Network" "$SOLANA_FEE_URL" || return
+
     # --- Wallet Selection Block ---
     WALLET_DIR="$HOME/.config/solana"
     WALLETS=( "$WALLET_DIR"/*.json )

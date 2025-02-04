@@ -43,12 +43,14 @@ CURRENT_PAGE=1
 ITEMS_PER_PAGE=15  # 5 items x 3 columns
 MAX_ITEMS=30  # Adjust based on total menu items
 
-SHOW_TOOLTIPS=true
+SHOW_TOOLTIPS=false  # Changed default to false
 SETTINGS_FILE=".settings"
 AUTO_UPDATE=true
 TERMINAL_COLORS=true
 DEFAULT_NETWORK="devnet"
 CACHE_ENABLED=true
+LOGGING_ENABLED=true # New variable for logging
+LOGS_DIR="./logs"    # New variable for logs directory
 
 ###############################################################################
 # Utility Functions
@@ -76,6 +78,26 @@ display_fee_warning() {
         return 1
     fi
     return 0
+}
+
+log_action() {
+    if [ "$LOGGING_ENABLED" = true ]; then
+        local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+        local action="$1"
+        local details="$2"
+        
+        # Create logs directory if it doesn't exist
+        mkdir -p "$LOGS_DIR"
+        
+        # Log with timestamp and action
+        echo "[$timestamp] $action: $details" >> "$LOGS_DIR/activity.log"
+        
+        # Rotate logs if they get too large (over 10MB)
+        if [ -f "$LOGS_DIR/activity.log" ] && [ $(stat -f%z "$LOGS_DIR/activity.log") -gt 10485760 ]; then
+            mv "$LOGS_DIR/activity.log" "$LOGS_DIR/activity.log.old"
+            touch "$LOGS_DIR/activity.log"
+        fi
+    fi
 }
 
 ###############################################################################
@@ -376,16 +398,11 @@ select_solana_version() {
 # Install Metaplex CLI Function
 ###############################################################################
 install_metaplex() {
-    if ! command -v metaplex &>/dev/null; then
-        echo -e "${RED}Metaplex CLI not found.${NC}"
-        read -p "Install Metaplex CLI via npm? (y/n): " METAPLEX_INSTALL
-        if [[ "$METAPLEX_INSTALL" == "y" ]]; then
-            npm install -g @metaplex-foundation/cli
-        else
-            echo -e "${RED}Skipping Metaplex CLI installation. Metadata immutability will not be available.${NC}"
-        fi
+    if ! command -v sugar &>/dev/null; then
+        echo -e "${RED}Sugar CLI not found. Installing...${NC}"
+        bash <(curl -sSf https://sugar.metaplex.com/install.sh)
     else
-        echo -e "${GREEN}Found Metaplex CLI.${NC}"
+        echo -e "${GREEN}Sugar CLI already installed.${NC}"
     fi
 }
 
@@ -593,8 +610,34 @@ token_creator_menu() {
     read -p "Enter token symbol (e.g., TKN): " TOKEN_SYMBOL
     read -p "Enter token description: " TOKEN_DESC
     read -p "Enter total supply (e.g., 1000000): " TOTAL_SUPPLY
-    read -p "Enter decimals (default: 9): " DECIMALS
-    DECIMALS=${DECIMALS:-9}
+    read -p "Enter decimals (default: 6): " DECIMALS
+    DECIMALS=${DECIMALS:-6}
+
+    # Prompt for tax and anti-bot features
+    read -p "Enable tax? (y/n): " ENABLE_TAX
+    read -p "Enable anti-bot features? (y/n): " ENABLE_ANTI_BOT
+
+    # Prompt for custom address
+    read -p "Use custom address? (y/n): " CUSTOM_ADDRESS
+    if [[ "$CUSTOM_ADDRESS" == "y" ]]; then
+        read -p "Enter custom address prefix (max 4 characters): " CUSTOM_PREFIX
+        read -p "Enter custom address suffix (max 4 characters): " CUSTOM_SUFFIX
+        echo -e "${RED}Warning: Custom address generation can take hours to days.${NC}"
+        read -p "Set timeout limit in minutes (default: 60): " TIMEOUT
+        TIMEOUT=${TIMEOUT:-60}
+        TIMEOUT=$((TIMEOUT * 60))
+        echo "Generating custom address..."
+        # Simulate custom address generation with a progress bar
+        for ((i=0; i<=TIMEOUT; i+=10)); do
+            printf "\rProgress: [%-50s] %d%%" $(printf "#%.0s" $(seq 1 $((i/2)))) $((i*100/TIMEOUT))
+            sleep 10
+        done
+        echo ""
+        read -p "Custom address generation taking too long. Try again or change custom address? (y/n): " TRY_AGAIN
+        if [[ "$TRY_AGAIN" == "y" ]]; then
+            return
+        fi
+    fi
 
     # Create config directory for the token
     TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
@@ -694,6 +737,100 @@ EOF
         fi
     else
         echo -e "${GREEN}Token files prepared. Run deploy.sh when ready to deploy.${NC}"
+    fi
+
+    # Prompt for metadata creation
+    read -p "Create metadata? (y/n): " CREATE_METADATA
+    if [[ "$CREATE_METADATA" == "y" ]]; then
+        echo -e "${RED}Warning: Metaplex may charge fees.${NC}"
+        read -p "Enter creator name: " CREATOR_NAME
+        read -p "Enter creator website: " CREATOR_WEBSITE
+        read -p "Enter short description of the coin: " COIN_DESC
+        if [ ! -f "$TOKEN_DIR/token.png" ]; then
+            read -p "Enter path or URL to image (or 's' to skip): " IMAGE_PATH
+            if [[ "$IMAGE_PATH" != "s" ]]; then
+                wget -O "$TOKEN_DIR/token.png" "$IMAGE_PATH"
+            fi
+        fi
+        read -p "Enter X username: " X_USERNAME
+        read -p "Enter Telegram username: " TELEGRAM_USERNAME
+        read -p "Enter Discord username: " DISCORD_USERNAME
+
+        # Create metadata JSON file
+        cat > "$TOKEN_DIR/metadata.json" << EOF
+{
+    "name": "$TOKEN_NAME",
+    "symbol": "$TOKEN_SYMBOL",
+    "description": "$COIN_DESC",
+    "image": "$TOKEN_DIR/token.png",
+    "external_url": "$CREATOR_WEBSITE",
+    "attributes": [],
+    "properties": {
+        "creators": [
+            {
+                "address": "$CURRENT_WALLET",
+                "share": 100
+            }
+        ]
+    },
+    "socials": {
+        "x": "$X_USERNAME",
+        "telegram": "$TELEGRAM_USERNAME",
+        "discord": "$DISCORD_USERNAME"
+    }
+}
+EOF
+    fi
+
+    # Prompt for revoking authorities
+    read -p "Revoke freeze authority? (y/n): " REVOKE_FREEZE
+    read -p "Revoke mint authority? (y/n): " REVOKE_MINT
+    read -p "Revoke update authority? (y/n): " REVOKE_UPDATE
+
+    # Deploy token
+    echo "Deploying token..."
+    ./deploy.sh
+    sleep 45
+
+    # Update metadata
+    if [[ "$CREATE_METADATA" == "y" ]]; then
+        echo "Updating metadata..."
+        metaplex update_metadata --mint "$TOKEN_MINT" --metadata "$TOKEN_DIR/metadata.json" --keypair "$FEE_PAYER"
+    fi
+
+    # Apply revoking authorities
+    if [[ "$REVOKE_FREEZE" == "y" ]]; then
+        spl-token authorize "$TOKEN_MINT" freeze 11111111111111111111111111111111 --fee-payer "$FEE_PAYER"
+    fi
+    if [[ "$REVOKE_MINT" == "y" ]]; then
+        spl-token authorize "$TOKEN_MINT" mint 11111111111111111111111111111111 --fee-payer "$FEE_PAYER"
+    fi
+    if [[ "$REVOKE_UPDATE" == "y" ]]; then
+        metaplex update_metadata --mint "$TOKEN_MINT" --new-update-authority 11111111111111111111111111111111 --keypair "$FEE_PAYER"
+    fi
+
+    # Log token creation
+    log_action "Token Creation" "Created token $TOKEN_NAME with symbol $TOKEN_SYMBOL"
+    
+    # Log deployment
+    if [[ "$DEPLOY_NOW" == "y" ]]; then
+        log_action "Token Deployment" "Deployed token $TOKEN_NAME with mint address $TOKEN_MINT"
+    fi
+    
+    # Log metadata creation
+    if [[ "$CREATE_METADATA" == "y" ]]; then
+        log_action "Metadata" "Created metadata for token $TOKEN_NAME"
+    fi
+    
+    # Log authority changes
+    if [[ "$REVOKE_FREEZE" == "y" ]]; then
+        log_action "Authority" "Revoked freeze authority for token $TOKEN_NAME"
+    fi
+    if [[ "$REVOKE_MINT" == "y" ]]; then
+        log_action "Authority" "Revoked mint authority for token $TOKEN_NAME"
+    fi
+    if [[ "$REVOKE_UPDATE" == "y" ]]; then
+        log_action "Authority" "Revoked update authority for token $TOKEN_NAME"
     fi
 
     read -p "Press Enter to return to menu..."
@@ -2801,9 +2938,12 @@ settings_menu() {
         echo "3. Toggle Terminal Colors (Currently: ${TERMINAL_COLORS:+Enabled}${TERMINAL_COLORS:-Disabled})"
         echo "4. Set Default Network (Current: $DEFAULT_NETWORK)"
         echo "5. Toggle Cache (Currently: ${CACHE_ENABLED:+Enabled}${CACHE_ENABLED:-Disabled})"
-        echo "6. Export Settings"
-        echo "7. Import Settings"
-        echo "8. Reset to Defaults"
+        echo "6. Toggle Logging (Currently: ${LOGGING_ENABLED:+Enabled}${LOGGING_ENABLED:-Disabled})"
+        echo "7. View Logs"
+        echo "8. Clear Logs"
+        echo "9. Export Settings"
+        echo "10. Import Settings"
+        echo "11. Reset to Defaults"
         echo "M. Return to Main Menu"
         
         read -p "Enter your choice: " choice
@@ -2813,13 +2953,43 @@ settings_menu() {
             3) toggle_colors ;;
             4) set_default_network ;;
             5) toggle_cache ;;
-            6) export_settings ;;
-            7) import_settings ;;
-            8) reset_settings ;;
+            6) toggle_logging ;;
+            7) view_logs ;;
+            8) clear_logs ;;
+            9) export_settings ;;
+            10) import_settings ;;
+            11) reset_settings ;;
             [Mm]) break ;;
             *) echo "Invalid selection" ; sleep 1 ;;
         esac
     done
+}
+
+toggle_logging() {
+    LOGGING_ENABLED=!$LOGGING_ENABLED
+    echo "Logging ${LOGGING_ENABLED:+enabled}${LOGGING_ENABLED:-disabled}"
+    save_settings
+    log_action "Settings" "Logging ${LOGGING_ENABLED:+enabled}${LOGGING_ENABLED:-disabled}"
+    sleep 1
+}
+
+view_logs() {
+    if [ -f "$LOGS_DIR/activity.log" ]; then
+        ${PAGER:-less} "$LOGS_DIR/activity.log"
+    else
+        echo "No logs found"
+        sleep 1
+    fi
+}
+
+clear_logs() {
+    read -p "Are you sure you want to clear all logs? (y/n): " confirm
+    if [[ "$confirm" == "y" ]]; then
+        rm -f "$LOGS_DIR"/*.log
+        echo "Logs cleared"
+        log_action "Settings" "Logs cleared"
+    fi
+    sleep 1
 }
 
 toggle_tooltips() {
@@ -2888,6 +3058,7 @@ AUTO_UPDATE=$AUTO_UPDATE
 TERMINAL_COLORS=$TERMINAL_COLORS
 DEFAULT_NETWORK=$DEFAULT_NETWORK
 CACHE_ENABLED=$CACHE_ENABLED
+LOGGING_ENABLED=$LOGGING_ENABLED
 EOF
 }
 
@@ -2941,165 +3112,4 @@ reset_settings() {
 load_settings
 
 # ... rest of existing code ...
-```bash
-# ...existing code...
-
-token_creator_menu() {
-    print_header
-    echo "Token Creator"
-    echo "-------------"
-
-    display_fee_warning "Solana Network" "$SOLANA_FEE_URL" || return
-
-    # --- Wallet Selection Block ---
-    WALLET_DIR="$HOME/.config/solana"
-    WALLETS=( "$WALLET_DIR"/*.json )
-    if [ ${#WALLETS[@]} -eq 0 ]; then
-        echo -e "${RED}Error: No wallet keypair JSON files found in $WALLET_DIR.${NC}"
-        sleep 2
-        return 1
-    fi
-
-    echo "Available wallets:"
-    for i in "${!WALLETS[@]}"; do
-        ADDRESS=$(solana address -k "${WALLETS[$i]}" 2>/dev/null | tr -d '[:space:]')
-        echo "$((i+1)). ${WALLETS[$i]} ($ADDRESS)"
-    done
-
-    read -p "Select a wallet by number: " wallet_choice
-    wallet_index=$((wallet_choice - 1))
-    if [ $wallet_index -lt 0 ] || [ $wallet_index -ge ${#WALLETS[@]} ]; then
-        echo -e "${RED}Invalid selection.${NC}"
-        sleep 2
-        return 1
-    fi
-    FEE_PAYER="${WALLETS[$wallet_index]}"
-    echo -e "${GREEN}Selected wallet: $FEE_PAYER${NC}"
-
-    # Get the selected wallet's public key
-    CURRENT_WALLET=$(solana address -k "$FEE_PAYER" | tr -d '[:space:]')
-    echo -e "${GREEN}Your wallet address: $CURRENT_WALLET${NC}"
-
-    # Prompt for token details
-    read -p "Enter token name: " TOKEN_NAME
-    read -p "Enter token symbol (e.g., TKN): " TOKEN_SYMBOL
-    read -p "Enter token description: " TOKEN_DESC
-    read -p "Enter total supply (e.g., 1000000): " TOTAL_SUPPLY
-    read -p "Enter decimals (default: 9): " DECIMALS
-    DECIMALS=${DECIMALS:-9}
-
-    # Create config directory for the token
-    TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
-    mkdir -p "$TOKEN_DIR"
-
-    # Create token metadata
-    cat > "$TOKEN_DIR/config.json" << EOF
-{
-    "name": "$TOKEN_NAME",
-    "symbol": "$TOKEN_SYMBOL",
-    "description": "$TOKEN_DESC",
-    "supply": $TOTAL_SUPPLY,
-    "decimals": $DECIMALS,
-    "uri": "",
-    "sellerFeeBasisPoints": 0,
-    "creators": [
-        {
-            "address": "$CURRENT_WALLET",
-            "share": 100,
-            "verified": true
-        }
-    ],
-    "collection": null,
-    "uses": null
-}
-EOF
-
-    # Generate token contract
-    cat > "$TOKEN_DIR/${TOKEN_NAME}.rs" << EOF
-use anchor_lang::prelude::*;
-use anchor_spl::token;
-
-declare_id!("11111111111111111111111111111111");
-
-#[program]
-pub mod ${TOKEN_SYMBOL,,}_token {
-    use super::*;
-
-    pub fn initialize(ctx: Context<Initialize>, total_supply: u64) -> Result<()> {
-        let token_mint = &mut ctx.accounts.token_mint;
-        let token_account = &mut ctx.accounts.token_account;
-        let authority = &mut ctx.accounts.authority;
-
-        token::mint_to(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                token::MintTo {
-                    mint: token_mint.to_account_info(),
-                    to: token_account.to_account_info(),
-                    authority: authority.to_account_info(),
-                },
-            ),
-            total_supply,
-        )?;
-
-        Ok(())
-    }
-}
-
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(mut)]
-    pub token_mint: Account<'info, token::Mint>,
-    #[account(mut)]
-    pub token_account: Account<'info, token::TokenAccount>,
-    pub authority: Signer<'info>,
-    pub token_program: Program<'info, token::Token>,
-}
-EOF
-
-    # Create token deployment script
-    cat > "$TOKEN_DIR/deploy.sh" << EOF
-#!/bin/bash
-solana config set --url $NETWORK_URL
-sugar deploy -c "$TOKEN_DIR/config.json" -k "$FEE_PAYER"
-EOF
-    chmod +x "$TOKEN_DIR/deploy.sh"
-
-    echo -e "${GREEN}Token files created at: $TOKEN_DIR${NC}"
-    echo "1. Config: config.json"
-    echo "2. Contract: ${TOKEN_NAME}.rs"
-    echo "3. Deploy script: deploy.sh"
-
-    read -p "Deploy token now? (y/n): " DEPLOY_NOW
-    if [[ "$DEPLOY_NOW" == "y" ]]; then
-        cd "$TOKEN_DIR" || return
-        ./deploy.sh
-        
-        # Store the token mint address
-        if [ -f "mint.json" ]; then
-            TOKEN_MINT=$(jq -r .mintAddress "mint.json")
-            echo -e "${GREEN}Token deployment complete!${NC}"
-            echo "Token Mint Address: $TOKEN_MINT"
-            echo "TOKEN_MINT=$TOKEN_MINT" >> "$TOKEN_DIR/.env"
-        else
-            echo -e "${RED}Token deployment failed or mint address not found${NC}"
-        fi
-    else
-        echo -e "${GREEN}Token files prepared. Run deploy.sh when ready to deploy.${NC}"
-    fi
-
-    read -p "Press Enter to return to menu..."
-}
-
-# Remove Metaplex installation function since we're using Sugar exclusively
-install_metaplex() {
-    if ! command -v sugar &>/dev/null; then
-        echo -e "${RED}Sugar CLI not found. Installing...${NC}"
-        bash <(curl -sSf https://sugar.metaplex.com/install.sh)
-    else
-        echo -e "${GREEN}Sugar CLI already installed.${NC}"
-    fi
-}
-
-# ...existing code...
 

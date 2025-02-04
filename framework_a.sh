@@ -962,67 +962,68 @@ create_dao() {
 ###############################################################################
 main_menu() {
     CURRENT_PAGE=1
+    local PAGE_SIZE=8  # 4 rows x 2 columns
+    local TOTAL_ITEMS=15
+
     while true; do
         print_header
         echo "Setec's Labs: Solana AIO Token Manager"
-        echo "Type M at any submenu to return here."
+        echo "Type M at any time to return to this menu"
         echo
 
         # Calculate page bounds
-        local start_idx=$(( (CURRENT_PAGE-1) * 8 + 1 ))
-        local end_idx=$((CURRENT_PAGE * 8))
-        [[ $end_idx -gt 15 ]] && end_idx=15
+        local start_idx=$(( (CURRENT_PAGE-1) * PAGE_SIZE + 1 ))
+        local end_idx=$((CURRENT_PAGE * PAGE_SIZE))
+        [[ $end_idx -gt $TOTAL_ITEMS ]] && end_idx=$TOTAL_ITEMS
 
-        # Display menu in 2 columns
+        # Display menu items in 2 columns
         for ((i=start_idx; i<=end_idx; i+=2)); do
             display_menu_row "$i"
         done
         
         echo
-        # Only show navigation options if needed
+        echo -n "Navigation: "
         [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
-        [[ $((CURRENT_PAGE * 8)) -lt 15 ]] && echo -n "N-Next  "
+        [[ $((CURRENT_PAGE * PAGE_SIZE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
         echo "Q-Quit"
         echo
 
         read -p "Enter your choice: " main_choice
-
         case "$main_choice" in
             [Nn]) 
-                if ((CURRENT_PAGE * 8 < 15)); then
+                if ((CURRENT_PAGE * PAGE_SIZE < TOTAL_ITEMS)); then
                     ((CURRENT_PAGE++))
                 fi
-                continue
                 ;;
             [Pp])
                 if ((CURRENT_PAGE > 1)); then
                     ((CURRENT_PAGE--))
                 fi
-                continue
                 ;;
             [1-9]|1[0-5]) 
-                if ! [[ "$main_choice" =~ ^[0-9]+$ ]] || (( main_choice < 1 || main_choice > 15 )); then
+                if ! [[ "$main_choice" =~ ^[0-9]+$ ]] || (( main_choice < 1 || main_choice > TOTAL_ITEMS )); then
                     echo "Invalid selection."
                     sleep 1
                     continue
                 fi
                 
+                # Execute submenu function
                 case $main_choice in
-                    1) setup_environment_menu ;;
-                    2) wallet_management_menu ;;
-                    3) token_creator_menu ;;
-                    4) token_manager_menu ;;
-                    5) nft_creator_menu ;;
-                    6) smart_contract_menu ;;
-                    7) advanced_options_menu ;;
-                    8) trading_menu ;;
-                    9) source_code_menu ;;
-                    10) documentation_menu ;;
-                    11) upgrade_menu ;;
-                    12) custom_token_menu ;;
-                    13) bridge_menu ;;
-                    14) security_menu ;;
-                    15) analytics_menu ;;
+                    1) setup_environment_menu || true ;;
+                    2) wallet_management_menu || true ;;
+                    3) token_creator_menu || true ;;
+                    4) token_manager_menu || true ;;
+                    5) nft_creator_menu || true ;;
+                    6) smart_contract_menu || true ;;
+                    7) advanced_options_menu || true ;;
+                    8) trading_menu || true ;;
+                    9) source_code_menu || true ;;
+                    10) documentation_menu || true ;;
+                    11) upgrade_menu || true ;;
+                    12) custom_token_menu || true ;;
+                    13) bridge_menu || true ;;
+                    14) security_menu || true ;;
+                    15) analytics_menu || true ;;
                 esac
                 ;;
             [Qq]) 
@@ -1035,7 +1036,6 @@ main_menu() {
             *) 
                 echo "Invalid selection."
                 sleep 1
-                continue
                 ;;
         esac
     done
@@ -1064,7 +1064,7 @@ get_menu_item() {
 
 display_menu_row() {
     local start_idx=$1
-    local col_width=38  # Increased width for 2 columns
+    local col_width=38  # Width for 2 columns
     
     # Display two items per row
     for i in {0..1}; do
@@ -1075,6 +1075,53 @@ display_menu_row() {
         fi
     done
     echo
+}
+
+# Helper function for all submenus
+submenu() {
+    local title=$1
+    shift
+    local options=("$@")
+    
+    while true; do
+        print_header
+        echo "$title"
+        echo "------------------------"
+        local i=1
+        for opt in "${options[@]}"; do
+            echo "$i. $opt"
+            ((i++))
+        done
+        echo "M. Return to Main Menu"
+        
+        read -p "Enter your choice: " choice
+        if [[ "$choice" == [Mm] ]]; then
+            return 0
+        fi
+        
+        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice > 0 && choice <= ${#options[@]} )); then
+            return "$choice"
+        else
+            echo "Invalid selection. Try again."
+            sleep 1
+        fi
+    done
+}
+
+# Example submenu implementation:
+setup_environment_menu() {
+    while true; do
+        local options=("Dependency Installation/Check" "Select Network")
+        submenu "Setup Environment Menu" "${options[@]}"
+        local status=$?
+        
+        case $status in
+            0) return 0 ;;  # Return to main menu
+            1) dependency_menu ;;
+            2) select_network_menu ;;
+            *) continue ;;
+        esac
+    done
 }
 
 ###############################################################################

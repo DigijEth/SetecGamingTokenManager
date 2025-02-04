@@ -24,24 +24,11 @@ BOT_CONFIG_DIR="./bot_configs"
 TRADING_CONFIG_DIR="./trading_configs"
 SOURCE_CODE_DIR="./source_code"
 TEMPLATES_DIR="./templates"
-LEDGER_ENABLED=false
-TREZOR_ENABLED=false
-HARDWARE_WALLET_TYPE=""
-SESSION_TIMEOUT=3600  # 1 hour default
-
-METAPLEX_FEE_URL="https://docs.metaplex.com/programs/token-metadata/fees"
-SOLANA_FEE_URL="https://docs.solana.com/transaction_fees"
-OPENBOOK_FEE_URL="https://docs.openbook-dex.com/fees"
-RAYDIUM_FEE_URL="https://raydium.io/fees"
-JUPITER_FEE_URL="https://station.jup.ag/fees"
-DOCS_DIR="./docs"
-UPGRADE_DIR="./upgrades"
-BRIDGE_CONFIG_DIR="./bridges"
-CUSTOM_TOKEN_DIR="./custom_tokens"
-
-CURRENT_PAGE=1
-ITEMS_PER_PAGE=15  # 5 items x 3 columns
-MAX_ITEMS=30  # Adjust based on total menu items
+HARDWARE_WALLET_SUPPORT=true
+LOG_DIR="./logs"
+BACKUP_DIR="./backups"
+CONFIG_DIR="./configs"
+PRICE_FEED_URL="https://api.coingecko.com/api/v3"
 
 ###############################################################################
 # Utility Functions
@@ -58,17 +45,26 @@ pause() {
     read -r
 }
 
-display_fee_warning() {
-    local service="$1"
-    local fee_url="$2"
+load_price_feed() {
+    local coin="$1"
+    local price=$(curl -s "$PRICE_FEED_URL/simple/price?ids=solana&vs_currencies=usd" | jq -r '.solana.usd')
+    echo "$price"
+}
+
+save_transaction_history() {
+    local tx_type="$1"
+    local amount="$2"
+    local description="$3"
     
-    echo -e "${RED}WARNING: This operation may incur fees from $service.${NC}"
-    echo -e "Please check current fee structure at: $fee_url"
-    read -p "Continue? (y/n): " proceed
-    if [[ "$proceed" != "y" ]]; then
-        return 1
-    fi
-    return 0
+    mkdir -p "$LOG_DIR/transactions"
+    echo "[$(date "+%Y-%m-%d %H:%M:%S")] $tx_type: $amount - $description" >> "$LOG_DIR/transactions/history.log"
+}
+
+backup_wallet_config() {
+    local wallet_name="$1"
+    mkdir -p "$BACKUP_DIR/wallets"
+    cp "$HOME/.config/solana/${wallet_name}.json" "$BACKUP_DIR/wallets/"
+    echo "Backup created: $BACKUP_DIR/wallets/${wallet_name}.json"
 }
 
 ###############################################################################
@@ -296,10 +292,6 @@ check_dependencies() {
         echo -e "${GREEN}Installing Jupiter CLI...${NC}"
         npm install -g @jup-ag/jupiter-cli
     fi
-    if ! command -v qrencode &>/dev/null; then
-        echo -e "${GREEN}Installing qrencode...${NC}"
-        sudo apt-get install -y qrencode
-    fi
     echo "Dependency check complete."
     sleep 1
 }
@@ -409,34 +401,120 @@ select_network_menu() {
 wallet_management_menu() {
     while true; do
         print_header
-        echo "Wallet Management Menu"
-        echo "-------------------------"
+        
+        # Show wallet stats if active
         if [[ -n "${ACTIVE_WALLET:-}" ]]; then
-            echo "Active Wallet: $ACTIVE_WALLET"
-            echo "Balance: $(solana balance)"
-        else
-            echo "No active wallet set."
+            local sol_price=$(load_price_feed "solana")
+            local balance=$(solana balance | awk '{print $1}')
+            local usd_value=$(echo "$balance * $sol_price" | bc)
+            
+            echo -e "${GREEN}Wallet Stats${NC}"
+            echo "Address: $ACTIVE_WALLET"
+            echo "Balance: ◎$balance ($usd_value USD)"
+            echo "Network: $NETWORK_URL"
+            
+            # Show recent transactions
+            if [ -f "$LOG_DIR/transactions/history.log" ]; then
+                echo -e "\nRecent Transactions:"
+                tail -n 3 "$LOG_DIR/transactions/history.log"
+            fi
         fi
-        echo ""
-        echo "1. Create Wallet"
-        echo "2. View Wallet"
-        echo "3. Set Active Wallet"
-        echo "4. Manage Tokens (Send/Burn)"
-        echo "5. Connect Hardware Wallet"
-        echo "6. Hardware Wallet Settings"
+        
+        echo -e "\nWallet Options:"
+        echo "1. Create Wallet           # Create new software wallet"
+        echo "2. Import Hardware Wallet  # Connect Ledger device"
+        echo "3. View Wallet Details     # Show full transaction history"
+        echo "4. Export Wallet           # Backup wallet"
+        echo "5. Send/Receive            # Transfer SOL/tokens"
+        echo "6. Token Management        # Manage token holdings" 
+        echo "7. Transaction History     # View all transactions"
+        echo "8. Address Book            # Manage saved addresses"
+        echo "9. Security Settings       # Configure wallet security"
         echo "M. Return to Main Menu"
-        read -p "Enter your choice: " choice
+
+        read -p "Enter choice: " choice
         case "$choice" in
-            1) create_wallet ;;
-            2) view_wallet ;;
-            3) set_active_wallet ;;
-            4) manage_tokens ;;
-            5) connect_hardware_wallet ;;
-            6) hardware_wallet_settings ;;
+            1) create_software_wallet ;;
+            2) connect_hardware_wallet ;;
+            3) view_wallet_details ;;
+            4) export_wallet_backup ;;
+            5) transfer_menu ;;
+            6) token_management ;;
+            7) show_transaction_history ;;
+            8) address_book_menu ;;
+            9) security_settings ;;
             [Mm]) break ;;
-            *) echo "Invalid selection. Try again." ; sleep 1 ;;
+            *) echo "Invalid selection" ; sleep 1 ;;
         esac
     done
+}
+
+create_software_wallet() {
+    print_header
+    echo "Create New Software Wallet"
+    echo "-------------------------"
+    read -p "Enter wallet name: " wallet_name
+    
+    # Create wallet with additional security options
+    read -p "Use BIP39 passphrase? (y/n): " use_passphrase
+    if [[ "$use_passphrase" == "y" ]]; then
+        solana-keygen new --outfile "$HOME/.config/solana/${wallet_name}.json" --force
+    else
+        solana-keygen new --outfile "$HOME/.config/solana/${wallet_name}.json" --no-bip39-passphrase --force
+    fi
+    
+    # Backup the new wallet
+    backup_wallet_config "$wallet_name"
+    
+    # Log creation
+    save_transaction_history "CREATE" "0" "Created new wallet: $wallet_name"
+    
+    pause
+}
+
+connect_hardware_wallet() {
+    if ! $HARDWARE_WALLET_SUPPORT; then
+        echo "Hardware wallet support not enabled"
+        pause
+        return
+    fi
+    
+    print_header
+    echo "Connect Hardware Wallet"
+    echo "---------------------"
+    
+    echo "Scanning for Ledger devices..."
+    # Add actual Ledger detection/connection code here
+    
+    pause
+}
+
+view_wallet_details() {
+    print_header
+    echo "Wallet Details"
+    echo "-------------"
+    
+    if [ -z "$ACTIVE_WALLET" ]; then
+        echo "No active wallet selected"
+        pause
+        return
+    fi
+    
+    local sol_price=$(load_price_feed "solana")
+    local balance=$(solana balance)
+    
+    echo "Address: $ACTIVE_WALLET"
+    echo "Balance: $balance"
+    echo "USD Value: $sol_price"
+    echo ""
+    echo "Transaction History:"
+    if [ -f "$LOG_DIR/transactions/history.log" ]; then
+        cat "$LOG_DIR/transactions/history.log"
+    else
+        echo "No transaction history found"
+    fi
+    
+    pause
 }
 
 create_wallet() {
@@ -542,6 +620,118 @@ manage_tokens() {
     pause
 }
 
+import_wallet() {
+    print_header
+    echo "Import Wallet from Seed Phrase"
+    echo "------------------------------"
+    echo -e "${RED}WARNING: Only enter your seed phrase if you are in a secure environment!"
+    echo "Make sure no one can see your screen and you are not on a public network.${NC}"
+    echo ""
+    read -p "Do you wish to continue? (y/n): " confirm
+    if [[ "$confirm" != "y" ]]; then
+        return
+    fi
+
+    read -p "Enter number of words (12/24): " word_count
+    if [[ ! "$word_count" =~ ^(12|24)$ ]]; then
+        echo -e "${RED}Error: Only 12 or 24 word seeds are supported${NC}"
+        pause
+        return
+    fi
+
+    echo "Enter your seed phrase words one by one:"
+    seed_phrase=""
+    for i in $(seq 1 $word_count); do
+        read -p "Word $i: " word
+        seed_phrase+="$word "
+    done
+
+    # Remove trailing space
+    seed_phrase="${seed_phrase% }"
+
+    # Create new keypair file
+    read -p "Enter name for the wallet: " wallet_name
+    if [[ -z "$wallet_name" ]]; then
+        wallet_name="imported_wallet_$(date +%s)"
+    fi
+
+    echo "$seed_phrase" | solana-keygen recover "prompt:" -o "$HOME/.config/solana/${wallet_name}.json"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Wallet imported successfully${NC}"
+        read -p "Set as active wallet? (y/n): " set_active
+        if [[ "$set_active" == "y" ]]; then
+            ACTIVE_WALLET=$(solana address -k "$HOME/.config/solana/${wallet_name}.json")
+            echo "ACTIVE_WALLET=$ACTIVE_WALLET" >> .env
+            solana config set --keypair "$HOME/.config/solana/${wallet_name}.json"
+        fi
+    else
+        echo -e "${RED}Failed to import wallet. Please verify your seed phrase.${NC}"
+    fi
+    pause
+}
+
+export_wallet() {
+    print_header
+    echo -e "${RED}⚠️  WARNING - CRITICAL SECURITY INFORMATION ⚠️${NC}"
+    echo "=================================================="
+    echo -e "${RED}Your seed phrase is the master key to your wallet."
+    echo "Anyone with these words can steal your funds."
+    echo ""
+    echo "NEVER:"
+    echo "- Share these words with anyone"
+    echo "- Enter them on any website"
+    echo "- Store them in plain text or screenshots"
+    echo "- Export them on a public computer${NC}"
+    echo "=================================================="
+    echo ""
+    read -p "I understand the risks and wish to continue (yes/no): " confirm
+    if [[ "$confirm" != "yes" ]]; then
+        echo "Export cancelled."
+        pause
+        return
+    fi
+
+    if [ -z "$selected_wallet" ]; then
+        echo "No wallet selected. Please select a wallet first."
+        pause
+        return
+    fi
+
+    # Clear screen for additional security
+    clear
+    echo -e "${RED}🔒 YOUR SEED PHRASE WILL BE SHOWN IN 5 SECONDS"
+    echo "Please ensure no one can see your screen${NC}"
+    sleep 5
+    clear
+
+    echo -e "${RED}YOUR SEED PHRASE:${NC}"
+    echo "=================================================="
+    solana-keygen recover -k "$selected_wallet" --force
+    echo "=================================================="
+    echo -e "${RED}Store these words safely and never share them${NC}"
+    
+    read -p "Press Enter once you have safely stored your seed phrase..."
+    clear  # Clear screen after viewing for security
+}
+
+export_wallet_backup() {
+    print_header
+    echo "Export Wallet Backup"
+    echo "-------------------"
+    
+    if [ -z "$ACTIVE_WALLET" ]; then
+        echo "No active wallet selected"
+        pause
+        return
+    fi
+    
+    local wallet_name=$(basename "$ACTIVE_WALLET")
+    backup_wallet_config "$wallet_name"
+    
+    pause
+}
+
 ###############################################################################
 # Token Creator Submenu
 ###############################################################################
@@ -549,8 +739,6 @@ token_creator_menu() {
     print_header
     echo "Token Creator"
     echo "-------------"
-
-    display_fee_warning "Solana Network" "$SOLANA_FEE_URL" || return
 
     # --- Wallet Selection Block ---
     WALLET_DIR="$HOME/.config/solana"
@@ -966,38 +1154,19 @@ main_menu() {
         echo "Setec's Labs: Solana AIO Token Manager"
         echo "Type M at any submenu to return here."
         echo ""
-        
-        # Calculate page bounds
-        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
-        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
-        
-        # Display menu in 3 columns, 5 items each
-        for ((i=start_idx; i<=end_idx; i+=5)); do
-            printf "%-25s %-25s %-25s\n" \
-                "$(get_menu_item $i)" \
-                "$(get_menu_item $((i+1)))" \
-                "$(get_menu_item $((i+2)))"
-            printf "%-25s %-25s %-25s\n" \
-                "$(get_menu_tooltip $i)" \
-                "$(get_menu_tooltip $((i+1)))" \
-                "$(get_menu_tooltip $((i+2)))"
-            echo ""
-        done
-        
-        echo "N. Next Page    P. Previous Page    Q. Quit"
+        echo "1. Setup Environment"
+        echo "2. Wallet Management"
+        echo "3. Token Creator"
+        echo "4. Token Manager"
+        echo "5. NFT Creator"              # New
+        echo "6. Smart Contract Manager"    # New
+        echo "7. Advanced Options"          # Moved
+        echo "8. Trading & Bot Management"  # Moved
+        echo "9. Source Code Manager"       # New
+        echo "Q. Quit"
         
         read -p "Enter your choice: " main_choice
         case "$main_choice" in
-            [Nn]) 
-                if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
-                    ((CURRENT_PAGE++))
-                fi
-                ;;
-            [Pp])
-                if ((CURRENT_PAGE > 1)); then
-                    ((CURRENT_PAGE--))
-                fi
-                ;;
             1) setup_environment_menu ;;
             2) wallet_management_menu ;;
             3) token_creator_menu ;;
@@ -1007,58 +1176,10 @@ main_menu() {
             7) advanced_options_menu ;;
             8) trading_menu ;;
             9) source_code_menu ;;          # New
-            10) documentation_menu ;;       # New
-            11) upgrade_menu ;;             # New
-            12) custom_token_menu ;;        # New
-            13) bridge_menu ;;              # New
             [Qq]) echo "Exiting..."; exit 0 ;;
             *) echo "Invalid selection." ; sleep 1 ;;
         esac
     done
-}
-
-get_menu_item() {
-    local idx=$1
-    case $idx in
-        1)  echo "1. Setup Environment" ;;
-        2)  echo "2. Wallet Management" ;;
-        3)  echo "3. Token Creator" ;;
-        4)  echo "4. Token Manager" ;;
-        5)  echo "5. NFT Creator" ;;
-        6)  echo "6. Smart Contract Manager" ;;
-        7)  echo "7. Advanced Options" ;;
-        8)  echo "8. Trading & Bot Management" ;;
-        9)  echo "9. Source Code Manager" ;;
-        10) echo "10. Documentation Generator" ;;
-        11) echo "11. Contract Upgrade Tools" ;;
-        12) echo "12. Custom Token Standards" ;;
-        13) echo "13. Cross-chain Bridge" ;;
-        14) echo "14. Security Center" ;;
-        15) echo "15. Analytics Dashboard" ;;
-        *) echo "" ;;
-    esac
-}
-
-get_menu_tooltip() {
-    local idx=$1
-    case $idx in
-        1)  echo "    Configure environment and dependencies" ;;
-        2)  echo "    Manage wallets and connections" ;;
-        3)  echo "    Create and configure new tokens" ;;
-        4)  echo "    Manage existing tokens" ;;
-        5)  echo "    Create and manage NFTs" ;;
-        6)  echo "    Deploy and manage smart contracts" ;;
-        7)  echo "    Advanced protocol features" ;;
-        8)  echo "    Trading bots and automation" ;;
-        9)  echo "    Manage contract source code" ;;
-        10) echo "    Generate documentation" ;;
-        11) echo "    Upgrade contract tools" ;;
-        12) echo "    Custom token standard tools" ;;
-        13) echo "    Cross-chain bridge operations" ;;
-        14) echo "    Security and access control" ;;
-        15) echo "    View analytics and metrics" ;;
-        *) echo "" ;;
-    esac
 }
 
 ###############################################################################
@@ -1104,8 +1225,6 @@ create_openbook_market() {
     print_header
     echo "Create Openbook Market"
     echo "---------------------"
-
-    display_fee_warning "Openbook DEX" "$OPENBOOK_FEE_URL" || return
 
     # Verify openbook-dex CLI is installed
     if ! command -v openbook-dex &>/dev/null; then
@@ -1305,136 +1424,6 @@ create_bot() {
     
     read -p "Enter bot name: " bot_name
     read -p "Select strategy (GRID/MMM/TWAP): " strategy
-    read -p "Enter maximum amount per trade: " max_amount
-    read -p "Enter price range (min,max): " price_range
-    read -p "Enter spread percentage: " spread
-    read -p "Enable stop loss? (y/n): " enable_stop_loss
-    
-    if [[ "$enable_stop_loss" =~ ^[Yy]$ ]]; then
-        read -p "Enter stop loss percentage: " stop_loss
-    fi
-
-    # Save bot configuration
-    cat > "$BOT_CONFIG_DIR/${bot_name}.conf" << EOF
-BOT_NAME=$bot_name
-STRATEGY=$strategy
-MAX_AMOUNT=$max_amount
-PRICE_RANGE=$price_range
-SPREAD=$spread
-ENABLE_STOP_LOSS=$enable_stop_loss
-STOP_LOSS=${stop_loss:-0}
-MARKET=$selected_coin
-WALLET=$selected_wallet
-EOF
-
-    echo -e "${GREEN}Bot configuration saved.${NC}"
-    pause
-}
-
-list_bots() {
-    print_header
-    echo "Active Trading Bots"
-    echo "-----------------"
-    
-    if [ ! -d "$BOT_CONFIG_DIR" ]; then
-        echo "No bots configured."
-        pause
-        return
-    fi
-
-    for bot in "$BOT_CONFIG_DIR"/*.conf; do
-        if [ -f "$bot" ]; then
-            bot_name=$(basename "$bot" .conf)
-            if pgrep -f "trading_bot_${bot_name}" > /dev/null; then
-                status="${GREEN}Running${NC}"
-            else
-                status="${RED}Stopped${NC}"
-            fi
-            echo -e "Bot: $bot_name - Status: $status"
-        fi
-    done
-    pause
-}
-
-start_bot() {
-    print_header
-    echo "Start Trading Bot"
-    echo "---------------"
-    
-    if [ ! -d "$BOT_CONFIG_DIR" ]; then
-        echo "No bots configured."
-        pause
-        return
-    fi
-
-    # List available bots
-    echo "Available bots:"
-    ls -1 "$BOT_CONFIG_DIR"/*.conf | sed 's|.*/||' | sed 's/\.conf$//'
-    
-    read -p "Enter bot name to start: " bot_name
-    if [ ! -f "$BOT_CONFIG_DIR/${bot_name}.conf" ]; then
-        echo -e "${RED}Bot configuration not found.${NC}"
-        pause
-        return
-    fi
-
-    # Check if bot is already running
-    if pgrep -f "trading_bot_${bot_name}" > /dev/null; then
-        echo -e "${RED}Bot is already running.${NC}"
-        pause
-        return
-    fi
-
-    # Create logs directory if it doesn't exist
-    mkdir -p "$BOT_CONFIG_DIR/logs"
-    
-    # Start bot in background with proper logging
-    nohup ./trading_bot.sh "$BOT_CONFIG_DIR/${bot_name}.conf" \
-        > "$BOT_CONFIG_DIR/logs/${bot_name}.log" 2>&1 &
-    
-    # Save PID for management
-    echo $! > "$BOT_CONFIG_DIR/logs/${bot_name}.pid"
-    
-    echo -e "${GREEN}Bot started. Check $BOT_CONFIG_DIR/logs/${bot_name}.log for details.${NC}"
-    pause
-}
-
-stop_bot() {
-    print_header
-    echo "Stop Trading Bot"
-    echo "--------------"
-    
-    # List running bots
-    echo "Running bots:"
-    for bot in "$BOT_CONFIG_DIR"/*.conf; do
-        if [ -f "$bot" ]; then
-            bot_name=$(basename "$bot" .conf)
-            if pgrep -f "trading_bot_${bot_name}" > /dev/null; then
-                echo "$bot_name"
-            fi
-        fi
-    done
-    
-    read -p "Enter bot name to stop: " bot_name
-    pkill -f "trading_bot_${bot_name}"
-    echo -e "${GREEN}Bot stopped.${NC}"
-    pause
-}
-
-edit_bot() {
-    print_header
-    echo "Edit Bot Configuration"
-    echo "--------------------"
-    
-    if [ ! -d "$BOT_CONFIG_DIR" ]; then
-        echo "No bots configured."
-        pause
-        return
-    fi
-
-    # List available bots
-    echo "Available bots:"
-    ls -1 "$BOT_CONFIG_DIR"/*.conf | sed 's|.*/||' | sed 's/\.conf$//'
     
     read -p "Enter bot name to edit: " bot_name
     if [ ! -f "$BOT_CONFIG_DIR/${bot_name}.conf" ]; then
@@ -1479,13 +1468,6 @@ register_domain() {
     print_header
     echo "Register SNS Domain"
     echo "-----------------"
-    
-    echo -e "${RED}WARNING: SNS domain registration requires SOL for both registration and renewal.${NC}"
-    echo "Please check current pricing at: https://docs.solana.com/name-service"
-    read -p "Continue? (y/n): " proceed
-    if [[ "$proceed" != "y" ]]; then
-        return
-    fi
     
     read -p "Enter domain name (without .sol): " domain_name
     
@@ -1558,8 +1540,6 @@ create_liquidity_pool() {
     echo "Create Liquidity Pool"
     echo "-------------------"
     
-    display_fee_warning "Raydium" "$RAYDIUM_FEE_URL" || return
-    
     if [ -z "$selected_coin" ]; then
         echo -e "${RED}No token selected. Please select a token first.${NC}"
         pause
@@ -1607,8 +1587,6 @@ jupiter_swap() {
     print_header
     echo "Jupiter Swap"
     echo "------------"
-    
-    display_fee_warning "Jupiter" "$JUPITER_FEE_URL" || return
     
     if [ -z "$selected_coin" ]; then
         echo -e "${RED}No token selected. Please select a token first.${NC}"
@@ -1679,8 +1657,6 @@ create_single_nft() {
     echo "Create Single NFT"
     echo "----------------"
     
-    display_fee_warning "Metaplex" "$METAPLEX_FEE_URL" || return
-    
     read -p "Enter NFT name: " nft_name
     read -p "Enter NFT symbol: " nft_symbol
     read -p "Enter metadata URI: " uri
@@ -1697,35 +1673,6 @@ create_single_nft() {
     save_source_code "nft" "$nft_name"
     
     pause
-}
-
-create_nft_collection() {
-    print_header
-    echo "Create NFT Collection"
-    echo "------------------"
-    
-    display_fee_warning "Metaplex" "$METAPLEX_FEE_URL" || return
-    
-    read -p "Enter collection name: " collection_name
-    read -p "Enter collection symbol: " collection_symbol
-    read -p "Enter collection size: " collection_size
-    read -p "Enter base URI: " base_uri
-    
-    # Create collection config
-    mkdir -p "./.sugar/config"
-    cat > ./.sugar/config.json << EOF
-{
-    "name": "$collection_name",
-    "symbol": "$collection_symbol",
-    "description": "Collection of $collection_size NFTs",
-    "size": $collection_size,
-    "baseUri": "$base_uri"
-}
-EOF
-
-    sugar launch
-    
-    save_source_code "nft_collection" "$collection_name"
 }
 
 # Add new functions for Smart Contract Management
@@ -1777,42 +1724,6 @@ create_contract() {
     
     echo -e "${GREEN}Contract created at $SOURCE_CODE_DIR/$contract_name${NC}"
     pause
-}
-
-deploy_contract() {
-    print_header
-    echo "Deploy Smart Contract"
-    echo "------------------"
-    
-    read -p "Enter contract path: " contract_path
-    read -p "Enter network (devnet/mainnet): " network
-    
-    cd "$contract_path" || return
-    anchor build
-    anchor deploy --provider.cluster "$network"
-    
-    echo -e "${GREEN}Contract deployed successfully${NC}"
-}
-
-initialize_contract() {
-    print_header
-    echo "Initialize Contract"
-    echo "-----------------"
-    
-    read -p "Enter contract address: " contract_address
-    read -p "Enter constructor parameters (JSON): " params
-    
-    # Validate JSON format
-    if ! echo "$params" | jq . >/dev/null 2>&1; then
-        echo -e "${RED}Invalid JSON format${NC}"
-        return 1
-    fi
-    
-    echo "Initializing contract..."
-    anchor initialize "$contract_address" \
-        --program-id "$contract_address" \
-        --keypair "$selected_wallet" \
-        --data "$params"
 }
 
 # Add Source Code Management functions
@@ -1894,591 +1805,5 @@ pub mod ${name}_program {
 EOF
             ;;
     esac
-}
-
-view_source_code() {
-    print_header
-    echo "View Source Code"
-    echo "--------------"
-    
-    # List available source code files
-    if [ ! -d "$SOURCE_CODE_DIR" ]; then
-        echo "No source code files found."
-        pause
-        return
-    fi
-
-    echo "Available source code files:"
-    find "$SOURCE_CODE_DIR" -type f -name "*.rs" -exec basename {} \;
-    
-    read -p "Enter filename to view: " filename
-    if [ -f "$SOURCE_CODE_DIR/$filename" ]; then
-        ${PAGER:-less} "$SOURCE_CODE_DIR/$filename"
-    else
-        echo -e "${RED}File not found.${NC}"
-    fi
-    pause
-}
-
-export_source_code() {
-    print_header
-    echo "Export Source Code"
-    echo "----------------"
-    
-    if [ ! -d "$SOURCE_CODE_DIR" ]; then
-        echo "No source code files found."
-        pause
-        return
-    fi
-
-    read -p "Enter export directory: " export_dir
-    mkdir -p "$export_dir"
-    
-    # Export all source code files
-    cp -r "$SOURCE_CODE_DIR"/* "$export_dir/"
-    
-    echo -e "${GREEN}Source code exported to $export_dir${NC}"
-    pause
-}
-
-import_source_code() {
-    print_header
-    echo "Import Source Code"
-    echo "----------------"
-    
-    read -p "Enter path to source code file/directory: " import_path
-    
-    if [ ! -e "$import_path" ]; then
-        echo -e "${RED}Path not found.${NC}"
-        pause
-        return
-    }
-    
-    mkdir -p "$SOURCE_CODE_DIR"
-    
-    if [ -d "$import_path" ]; then
-        cp -r "$import_path"/* "$SOURCE_CODE_DIR/"
-    else
-        cp "$import_path" "$SOURCE_CODE_DIR/"
-    fi
-    
-    echo -e "${GREEN}Source code imported successfully.${NC}"
-    pause
-}
-
-verify_source_code() {
-    print_header
-    echo "Verify Source Code"
-    echo "----------------"
-    
-    if [ ! -d "$SOURCE_CODE_DIR" ]; then
-        echo "No source code files found."
-        pause
-        return
-    fi
-
-    read -p "Enter contract address to verify: " contract_address
-    read -p "Enter source file name: " source_file
-    
-    if [ ! -f "$SOURCE_CODE_DIR/$source_file" ]; then
-        echo -e "${RED}Source file not found.${NC}"
-        pause
-        return
-    fi
-    
-    # Simulate verification process
-    echo "Verifying contract $contract_address..."
-    echo "Compiling source code..."
-    sleep 2
-    echo "Comparing bytecode..."
-    sleep 1
-    echo -e "${GREEN}Source code verified successfully!${NC}"
-    pause
-}
-
-###############################################################################
-# Hardware Wallet Support Functions
-###############################################################################
-connect_hardware_wallet() {
-    print_header
-    echo "Hardware Wallet Connection"
-    echo "------------------------"
-    echo "1. Ledger"
-    echo "2. Trezor"
-    echo "3. SafePal"
-    echo "M. Return"
-    
-    read -p "Select hardware wallet type: " hw_choice
-    case "$hw_choice" in
-        1)
-            if ! command -v ledger-app-solana &>/dev/null; then
-                echo -e "${RED}Ledger Solana app not found. Installing...${NC}"
-                sudo apt-get install -y ledger-app-solana
-            fi
-            HARDWARE_WALLET_TYPE="ledger"
-            solana-ledger-cli connect
-            LEDGER_ENABLED=true
-            ;;
-        2)
-            if ! command -v trezor-agent &>/dev/null; then
-                echo -e "${RED}Trezor agent not found. Installing...${NC}"
-                pip install trezor
-            fi
-            HARDWARE_WALLET_TYPE="trezor"
-            TREZOR_ENABLED=true
-            ;;
-        [Mm]) return ;;
-        *) echo "Invalid selection" ;;
-    esac
-}
-
-hardware_wallet_settings() {
-    print_header
-    echo "Hardware Wallet Settings"
-    echo "----------------------"
-    echo "1. Enable/Disable Hardware Wallet"
-    echo "2. Set Session Timeout"
-    echo "3. Set Spending Limits"
-    echo "4. Enable/Disable 2FA"
-    echo "M. Return"
-    
-    read -p "Enter your choice: " hw_choice
-    case "$hw_choice" in
-        1) toggle_hardware_wallet ;;
-        2) set_session_timeout ;;
-        3) set_spending_limits ;;
-        4) toggle_2fa ;;
-        [Mm]) return ;;
-        *) echo "Invalid selection" ;;
-    esac
-}
-
-toggle_hardware_wallet() {
-    if [ "$HARDWARE_WALLET_TYPE" == "ledger" ]; then
-        LEDGER_ENABLED=!$LEDGER_ENABLED
-        echo "Ledger wallet ${LEDGER_ENABLED:+enabled}${LEDGER_ENABLED:-disabled}."
-    elif [ "$HARDWARE_WALLET_TYPE" == "trezor" ]; then
-        TREZOR_ENABLED=!$TREZOR_ENABLED
-        echo "Trezor wallet ${TREZOR_ENABLED:+enabled}${TREZOR_ENABLED:-disabled}."
-    else
-        echo "No hardware wallet connected."
-    fi
-}
-
-set_session_timeout() {
-    read -p "Enter session timeout in minutes (default: 60): " timeout
-    SESSION_TIMEOUT=${timeout:-60}
-    SESSION_TIMEOUT=$((SESSION_TIMEOUT * 60))
-    echo "Session timeout set to $SESSION_TIMEOUT seconds."
-}
-
-set_spending_limits() {
-    read -p "Set daily spending limit (in SOL): " spend_limit
-    if [[ -n "$spend_limit" ]]; then
-        echo "DAILY_SPEND_LIMIT=$spend_limit" >> .env
-        echo "Daily spending limit set to $spend_limit SOL."
-    fi
-}
-
-toggle_2fa() {
-    read -p "Enable 2FA? (y/n): " enable_2fa
-    if [[ "$enable_2fa" == "y" ]]; then
-        setup_2fa
-    else
-        echo "2FA disabled."
-    fi
-}
-
-setup_2fa() {
-    if ! command -v oathtool &>/dev/null; then
-        echo -e "${RED}oathtool not found. Installing...${NC}"
-        sudo apt-get install -y oathtool
-    fi
-    
-    # Generate secret key
-    SECRET=$(openssl rand -base64 32)
-    echo "2FA_SECRET=$SECRET" >> .env
-    
-    # Display QR code
-    qrencode -t ANSI "otpauth://totp/SetecWallet:$ACTIVE_WALLET?secret=$SECRET&issuer=SetecLabs"
-    echo "Scan this QR code with your authenticator app"
-    pause
-}
-
-###############################################################################
-# Documentation Generator Functions
-###############################################################################
-documentation_menu() {
-    while true; do
-        print_header
-        echo "Documentation Generator"
-        echo "---------------------"
-        echo "1. Generate API Documentation"
-        echo "2. Generate User Guide"
-        echo "3. Generate Contract Documentation"
-        echo "4. Export Documentation"
-        echo "M. Return"
-        
-        read -p "Choice: " doc_choice
-        case "$doc_choice" in
-            1) generate_api_docs ;;
-            2) generate_user_guide ;;
-            3) generate_contract_docs ;;
-            4) export_docs ;;
-            [Mm]) break ;;
-        esac
-        pause
-    done
-}
-
-generate_api_docs() {
-    print_header
-    echo "Generating API Documentation"
-    echo "-------------------------"
-    
-    mkdir -p "$DOCS_DIR/api"
-    
-    # Use rustdoc to generate API documentation
-    if [ -d "$SOURCE_CODE_DIR" ]; then
-        cargo doc --no-deps --document-private-items
-        cp -r target/doc/* "$DOCS_DIR/api/"
-        echo -e "${GREEN}API documentation generated in $DOCS_DIR/api${NC}"
-    else
-        echo -e "${RED}No source code found to document${NC}"
-    fi
-}
-
-generate_user_guide() {
-    print_header
-    echo "Generating User Guide"
-    echo "------------------"
-    
-    mkdir -p "$DOCS_DIR/guides"
-    
-    # Generate README
-    cat > "$DOCS_DIR/guides/README.md" << EOF
-# User Guide
-
-## Overview
-This document provides instructions for using the Setec Solana Token Manager.
-
-## Features
-- Token Creation and Management
-- NFT Creation
-- Smart Contract Management
-- Trading & Bot Management
-- Cross-chain Bridge Integration
-EOF
-}
-
-generate_contract_docs() {
-    print_header
-    echo "Generating Contract Documentation"
-    echo "-----------------------------"
-    
-    mkdir -p "$DOCS_DIR/contracts"
-    
-    for contract in "$SOURCE_CODE_DIR"/*/*.rs; do
-        if [ -f "$contract" ]; then
-            filename=$(basename "$contract")
-            output_file="$DOCS_DIR/contracts/${filename%.rs}.md"
-            
-            # Extract documentation comments
-            grep -B1 "^\/\/\/" "$contract" > "$output_file"
-        fi
-    done
-}
-
-###############################################################################
-# Contract Upgrade Tools
-###############################################################################
-upgrade_menu() {
-    while true; do
-        print_header
-        echo "Contract Upgrade Tools"
-        echo "--------------------"
-        echo "1. Create Upgradeable Contract"
-        echo "2. Deploy Upgrade"
-        echo "3. Verify Upgrade"
-        echo "4. Rollback Upgrade"
-        echo "M. Return"
-        
-        read -p "Choice: " upgrade_choice
-        case "$upgrade_choice" in
-            1) create_upgradeable ;;
-            2) deploy_upgrade ;;
-            3) verify_upgrade ;;
-            4) rollback_upgrade ;;
-            [Mm]) break ;;
-        esac
-        pause
-    done
-}
-
-create_upgradeable() {
-    print_header
-    echo "Create Upgradeable Contract"
-    echo "-------------------------"
-    
-    read -p "Enter contract name: " contract_name
-    mkdir -p "$UPGRADE_DIR/$contract_name"
-    
-    # Create upgrade authority
-    solana-keygen new --outfile "$UPGRADE_DIR/$contract_name/upgrade_authority.json" --no-bip39-passphrase
-    
-    # Generate upgradeable contract template
-    cat > "$SOURCE_CODE_DIR/${contract_name}_upgradeable.rs" << EOF
-use anchor_lang::prelude::*;
-use solana_program::program_pack::Pack;
-
-#[program]
-pub mod ${contract_name}_upgradeable {
-    use super::*;
-    
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        Ok(())
-    }
-    
-    pub fn upgrade(ctx: Context<Upgrade>) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Accounts)]
-pub struct Initialize {}
-
-#[derive(Accounts)]
-pub struct Upgrade<'info> {
-    #[account(mut)]
-    pub upgrade_authority: Signer<'info>,
-}
-EOF
-}
-
-###############################################################################
-# Custom Token Standards Support
-###############################################################################
-custom_token_menu() {
-    while true; do
-        print_header
-        echo "Custom Token Standards"
-        echo "--------------------"
-        echo "1. Create Custom Token Standard"
-        echo "2. Import Token Standard"
-        echo "3. Deploy Custom Token"
-        echo "4. Verify Standard"
-        echo "M. Return"
-        
-        read -p "Choice: " token_choice
-        case "$token_choice" in
-            1) create_custom_standard ;;
-            2) import_standard ;;
-            3) deploy_custom_token ;;
-            4) verify_standard ;;
-            [Mm]) break ;;
-        esac
-        pause
-    done
-}
-
-create_custom_standard() {
-    print_header
-    echo "Create Custom Token Standard"
-    echo "-------------------------"
-    
-    read -p "Enter standard name: " standard_name
-    read -p "Include burnable? (y/n): " burnable
-    read -p "Include mintable? (y/n): " mintable
-    read -p "Include pausable? (y/n): " pausable
-    
-    mkdir -p "$CUSTOM_TOKEN_DIR/standards"
-    
-    # Generate custom token standard
-    cat > "$CUSTOM_TOKEN_DIR/standards/${standard_name}.rs" << EOF
-use anchor_lang::prelude::*;
-use anchor_spl::token;
-
-#[program]
-pub mod ${standard_name}_token {
-    use super::*;
-    
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        Ok(())
-    }
-    
-    $([ "$burnable" == "y" ] && echo 'pub fn burn(ctx: Context<Burn>, amount: u64) -> Result<()> {
-        Ok(())
-    }')
-    
-    $([ "$mintable" == "y" ] && echo 'pub fn mint(ctx: Context<Mint>, amount: u64) -> Result<()> {
-        Ok(())
-    }')
-    
-    $([ "$pausable" == "y" ] && echo 'pub fn pause(ctx: Context<Pause>) -> Result<()> {
-        Ok(())
-    }')
-}
-EOF
-}
-
-import_standard() {
-    print_header
-    echo "Import Token Standard"
-    echo "------------------"
-    
-    read -p "Enter path to standard: " standard_path
-    read -p "Enter standard name: " standard_name
-    
-    mkdir -p "$CUSTOM_TOKEN_DIR/standards"
-    cp "$standard_path" "$CUSTOM_TOKEN_DIR/standards/${standard_name}.rs"
-}
-
-deploy_custom_token() {
-    print_header
-    echo "Deploy Custom Token"
-    echo "----------------"
-    
-    read -p "Select standard: " standard_name
-    read -p "Enter token name: " token_name
-    read -p "Enter total supply: " supply
-    
-    if [ -f "$CUSTOM_TOKEN_DIR/standards/${standard_name}.rs" ]; then
-        # Compile and deploy custom token
-        cd "$CUSTOM_TOKEN_DIR/standards" || return
-        anchor build
-        anchor deploy --provider.cluster devnet
-    fi
-}
-
-verify_standard() {
-    print_header
-    echo "Verify Token Standard"
-    echo "------------------"
-    
-    read -p "Enter standard name: " standard_name
-    
-    if [ -f "$CUSTOM_TOKEN_DIR/standards/${standard_name}.rs" ]; then
-        # Verify standard implementation
-        cargo check
-        cargo test
-    fi
-}
-
-###############################################################################
-# Cross-chain Bridge Integration
-###############################################################################
-bridge_menu() {
-    while true; do
-        print_header
-        echo "Cross-chain Bridge Integration"
-        echo "---------------------------"
-        echo "1. Configure Bridge"
-        echo "2. Bridge Assets"
-        echo "3. View Bridge Status"
-        echo "4. Manage Liquidity"
-        echo "M. Return"
-        
-        read -p "Choice: " bridge_choice
-        case "$bridge_choice" in
-            1) configure_bridge ;;
-            2) bridge_assets ;;
-            3) view_bridge_status ;;
-            4) manage_bridge_liquidity ;;
-            [Mm]) break ;;
-        esac
-        pause
-    done
-}
-
-configure_bridge() {
-    print_header
-    echo "Configure Cross-chain Bridge"
-    echo "-------------------------"
-    
-    read -p "Select target chain (eth/bsc/polygon): " target_chain
-    read -p "Enter RPC endpoint: " rpc_endpoint
-    read -p "Enter bridge contract address: " bridge_address
-    
-    mkdir -p "$BRIDGE_CONFIG_DIR"
-    cat > "$BRIDGE_CONFIG_DIR/${target_chain}_config.json" << EOF
-{
-    "chain": "$target_chain",
-    "rpc": "$rpc_endpoint",
-    "bridge_address": "$bridge_address",
-    "enabled": true
-}
-EOF
-    
-    echo -e "${GREEN}Bridge configuration saved for $target_chain${NC}"
-}
-
-bridge_assets() {
-    print_header
-    echo "Bridge Assets"
-    echo "------------"
-    
-    read -p "Select source chain (solana/eth/bsc): " source_chain
-    read -p "Select destination chain (solana/eth/bsc): " dest_chain
-    read -p "Enter asset address: " asset_address
-    read -p "Enter amount: " amount
-    
-    # Load bridge config
-    if [ -f "$BRIDGE_CONFIG_DIR/${dest_chain}_config.json" ]; then
-        bridge_address=$(jq -r .bridge_address "$BRIDGE_CONFIG_DIR/${dest_chain}_config.json")
-        
-        echo "Initiating bridge transfer..."
-        solana bridge-transfer \
-            --from "$source_chain" \
-            --to "$dest_chain" \
-            --bridge "$bridge_address" \
-            --asset "$asset_address" \
-            --amount "$amount" \
-            --keypair "$selected_wallet"
-    else
-        echo -e "${RED}Bridge configuration not found for $dest_chain${NC}"
-    fi
-}
-
-view_bridge_status() {
-    print_header
-    echo "Bridge Status"
-    echo "------------"
-    
-    for config in "$BRIDGE_CONFIG_DIR"/*_config.json; do
-        if [ -f "$config" ]; then
-            chain=$(jq -r .chain "$config")
-            status=$(jq -r .enabled "$config")
-            echo "$chain: ${status:+Enabled}${status:-Disabled}"
-        fi
-    done
-}
-
-manage_bridge_liquidity() {
-    print_header
-    echo "Bridge Liquidity Management"
-    echo "------------------------"
-    
-    read -p "Select chain (eth/bsc/polygon): " chain
-    read -p "Action (add/remove): " action
-    read -p "Enter amount: " amount
-    
-    if [ -f "$BRIDGE_CONFIG_DIR/${chain}_config.json" ]; then
-        bridge_address=$(jq -r .bridge_address "$BRIDGE_CONFIG_DIR/${chain}_config.json")
-        
-        case "$action" in
-            add)
-                solana bridge-deposit \
-                    --bridge "$bridge_address" \
-                    --amount "$amount" \
-                    --keypair "$selected_wallet"
-                ;;
-            remove)
-                solana bridge-withdraw \
-                    --bridge "$bridge_address" \
-                    --amount "$amount" \
-                    --keypair "$selected_wallet"
-                ;;
-        esac
-    fi
 }
 

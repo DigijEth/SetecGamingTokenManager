@@ -62,7 +62,7 @@ The **Setec All In One Token Manager** is a **powerful, multi-functional blockch
 ```bash
 git clone https://github.com/DigijEth/SetecGamingTokenManager.git
 cd SetecGamingTokenManager
-chmod +x framework_betav2.sh
+chmod +x framework_betav3.sh
 ./framework_betav2.sh
 ```
 

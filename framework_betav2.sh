@@ -1,46 +1,65 @@
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
 # Dependency Check (Runs Only on First Run)
 DEPENDENCY_FILE="$HOME/.framework_dependencies_checked"
-if [ ! -f "$DEPENDENCY_FILE" ]; then
-    echo "Checking for required dependencies..."
-# Check for Python Web3
-if python3 -c "import web3" &> /dev/null; then
-        echo "[OK] Web3.py installed."
-    fi
 
-# Check for Solana CLI
-    if ! command -v solana &> /dev/null; then
-        echo "[OK] Solana CLI installed."
-    fi
+# Function to check dependency
+check_dependency() {
+    local name=$1
+    local cmd=$2
+    local type=$3
 
-# Check for Sugar CLI (Metaplex)
-    if ! command -v sugar &> /dev/null; then
-        echo "[OK] Sugar CLI installed."
+    printf "${YELLOW}Checking %-20s${NC}" "$name..."
+    if $cmd &> /dev/null; then
+        echo -e "${GREEN}✓${NC}"
+        return 0
+    else
+        echo -e "${RED}✗${NC}"
+        MISSING_DEPS+=("$name ($type)")
+        return 1
     fi
+}
 
-# Check for Metaboss CLI
-    if ! command -v metaboss &> /dev/null; then
-        echo "[OK] Metaboss CLI installed."
-    fi
+# Initialize missing dependencies array
+declare -a MISSING_DEPS=()
 
-# Check for Netlify CLI
-    if ! command -v netlify &> /dev/null; then
-        echo "[OK] Netlify CLI installed."
-    fi
+echo "=== Dependency Check ==="
 
-# Check for Apollo Client and GraphQL
-    if ! npm list -g @apollo/client graphql &> /dev/null; then
-        echo "[Missing] Apollo Client and GraphQL - Please install them via the setup environment menu."
-        echo "[OK] Apollo Client and GraphQL installed."
-    fi
+# Blockchain Dependencies
+echo -e "\n${YELLOW}Blockchain Tools:${NC}"
+check_dependency "Solana CLI" "command -v solana" "core"
+check_dependency "SPL-Token" "command -v spl-token" "core"
+check_dependency "Python Web3" "python3 -c 'import web3'" "python"
 
-# Check for SPL-Token CLI
-    if ! command -v spl-token &> /dev/null; then
-        echo "[OK] SPL-Token CLI installed."
+# NFT Tools
+echo -e "\n${YELLOW}NFT Tools:${NC}"
+check_dependency "Sugar CLI" "command -v sugar" "metaplex"
+check_dependency "Metaboss" "command -v metaboss" "metaplex"
+
+# Development Tools
+echo -e "\n${YELLOW}Development Tools:${NC}"
+check_dependency "Node.js" "command -v node" "core"
+check_dependency "npm" "command -v npm" "core"
+check_dependency "Netlify CLI" "command -v netlify" "deployment"
+check_dependency "Apollo Client" "npm list -g | grep @apollo/client" "graphql"
+
+# Summary of missing dependencies
+if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
+    echo -e "\n${RED}Missing Dependencies:${NC}"
+    printf '%s\n' "${MISSING_DEPS[@]}" | sed 's/^/- /'
+    echo -e "\n${YELLOW}Please use the Setup Environment menu to install missing dependencies${NC}"
+fi
+
+# Create check file to prevent repeated checks
+touch "$DEPENDENCY_FILE"
     fi
 
 # Check for Vercel CLI
     if ! command -v vercel &> /dev/null; then
-        echo "[OK] Vercel CLI installed."
     fi
 
 # Mark that dependencies have been checked
@@ -111,7 +130,6 @@ install_dependency() {
             echo "$cmd installed successfully."
             echo "Skipping $cmd installation. Some features may not work."
         fi
-        echo "$cmd is installed."
     fi
 }
 
@@ -160,7 +178,6 @@ for cmd in "${REQUIRED_COMMANDS[@]}"; do
             sudo pacman -S --noconfirm $cmd
             echo "Unsupported OS, please install $cmd manually."
         fi
-        echo "$cmd is installed."
     fi
 done
 

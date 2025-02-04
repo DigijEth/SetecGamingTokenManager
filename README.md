@@ -3,9 +3,13 @@
 **Setec Gaming Lab's
 – All-In-One Token Creator**
 
-Create and manage Solana Tokens with ease using our Token Manager or write and deploy Ethereum contracts using our simple script.
+Create and manage Solana Tokens with ease using our Token Manager or write and deploy Ethereum contracts using our simple bash script. 
 
 Best part, only fees you pay are the network fees!
+
+This project has been tested on Ubuntu 24 and Debian 12.9 but should work on any Debian based system with apt-get.
+
+A PowerShell version with GUI and AppleScript version with GUI is being developed as well as a Bash version with Homebrew.
 
 **Donations:** If you find this script helpful, please consider sending a tip to setec.sol on Solana. Your support helps us keep building!
 
@@ -128,6 +132,10 @@ LICENSE
 
 This project is licensed under the GNU General Public License v3.0. See LICENSE for details.
 
-------------------------------------------------------------------
+-----------------------------------
 
-Thank you for using the Setec Gaming Lab All-In-One Token Creator! If you have questions or suggestions, open an issue or a pull request in the official repository: https://github.com/DigijEth/Solena-anti-bot-Token.
+**Ethereum Contract Wizard**
+
+Our Ethereum Contract wizard streamlines the process of creating an ERC-20 Token and ERC-721 Token.
+
+It uses OpenZeppelin as its core. Right now the features are limited to contract creation and minting. More features are coming soon.

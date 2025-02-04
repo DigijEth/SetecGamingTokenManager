@@ -2694,3 +2694,68 @@ setup_environment_menu() {
 
 # ... existing code for other functions ...
 
+# Display menu item with proper formatting
+print_menu_item() {
+    local number="$1"
+    local text="$2"
+    printf "%${MENU_INDENT}s%2d. %-${MENU_WIDTH}s\n" "" "$number" "$text"
+}
+
+# Display a menu row (2 columns)
+display_menu_row() {
+    local start_idx=$1
+    local col_width=38
+    
+    for i in {0..1}; do
+        local item_num=$((start_idx + i))
+        if [ $item_num -le $TOTAL_ITEMS ]; then
+            printf "%2d. %-${col_width}s" "$item_num" "$(get_menu_option $item_num)"
+        fi
+    done
+    echo
+}
+
+# Get menu option text
+get_menu_option() {
+    case $1 in
+        1)  echo "Setup Environment" ;;
+        2)  echo "Wallet Management" ;;
+        3)  echo "Token Creator" ;;
+        4)  echo "Token Manager" ;;
+        5)  echo "NFT Creator" ;;
+        6)  echo "Smart Contract Manager" ;;
+        7)  echo "Advanced Options" ;;
+        8)  echo "Trading & Bot Management" ;;
+        9)  echo "Source Code Manager" ;;
+        10) echo "Documentation Generator" ;;
+        11) echo "Contract Upgrade Tools" ;;
+        12) echo "Custom Token Standards" ;;
+        13) echo "Cross-chain Bridge" ;;
+        14) echo "Security Center" ;;
+        15) echo "Analytics Dashboard" ;;
+        *)  echo "" ;;
+    esac
+    
+    # Commented out tooltips - preserved for future use if needed
+    #case $1 in
+    #    1)  echo "    Configure environment and dependencies" ;;
+    #    2)  echo "    Manage wallets and connections" ;;
+    #    3)  echo "    Create and configure new tokens" ;;
+    #    4)  echo "    Manage existing tokens" ;;
+    #    5)  echo "    Create and manage NFTs" ;;
+    #    6)  echo "    Deploy and manage smart contracts" ;;
+    #    7)  echo "    Advanced protocol features" ;;
+    #    8)  echo "    Trading bots and automation" ;;
+    #    9)  echo "    Manage contract source code" ;;
+    #    10) echo "    Generate documentation" ;;
+    #    11) echo "    Upgrade contract tools" ;;
+    #    12) echo "    Custom token standard tools" ;;
+    #    13) echo "    Cross-chain bridge operations" ;;
+    #    14) echo "    Security and access control" ;;
+    #    15) echo "    View analytics and metrics" ;;
+    #    *)  echo "" ;;
+    #esac
+}
+
+# ... rest of existing code ...
+

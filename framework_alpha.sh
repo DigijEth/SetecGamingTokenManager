@@ -2575,167 +2575,6 @@ get_menu_item() {
 
 display_menu_row() {
     local start_idx=$1
-    for i in {0..2}; do
-        local item_num=$((start_idx + i))
-        local item_text=$(get_menu_item $item_num)
-        if [ -n "$item_text" ]; then
-            printf "%2d. %-30s" "$item_num" "$item_text"
-        fi
-    done
-    echo
-}
-
-# Define security and analytics menus at the top level
-security_menu() {
-    print_header
-    echo "Security Center"
-    echo "--------------"
-    echo "Coming soon..."
-    pause
-}
-
-analytics_menu() {
-    print_header
-    echo "Analytics Dashboard"
-    echo "------------------"
-    echo "Coming soon..."
-    pause
-}
-
-# Main menu with fixed navigation and error handling
-main_menu() {
-    CURRENT_PAGE=1
-    while true; do
-        print_header
-        echo "Setec's Labs: Solana AIO Token Manager"
-        echo "Type M at any submenu to return here."
-        echo
-
-        # Calculate page bounds with bounds checking
-        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
-        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
-        [[ $end_idx -gt $MAX_ITEMS ]] && end_idx=$MAX_ITEMS
-
-        # Display menu in 3 columns
-        for ((i=start_idx; i<=end_idx; i+=3)); do
-            display_menu_row "$i"
-        done
-
-        echo
-        # Only show navigation options if needed
-        [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P. Previous Page    "
-        [[ $((CURRENT_PAGE * ITEMS_PER_PAGE)) -lt $MAX_ITEMS ]] && echo -n "N. Next Page    "
-        echo "Q. Quit"
-        echo
-
-        read -p "Enter your choice: " main_choice
-
-        case "$main_choice" in
-            [Nn]) 
-                if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
-                    ((CURRENT_PAGE++))
-                fi
-                continue
-                ;;
-            [Pp])
-                if ((CURRENT_PAGE > 1)); then
-                    ((CURRENT_PAGE--))
-                fi
-                continue
-                ;;
-            [1-9]|1[0-5]) 
-                selection=$((main_choice))
-                if (( selection < 1 || selection > MAX_ITEMS )); then
-                    echo "Invalid menu option."
-                    sleep 1
-                    continue
-                fi
-
-                case $selection in
-                    1) setup_environment_menu ;;
-                    2) wallet_management_menu ;;
-                    3) token_creator_menu ;;
-                    4) token_manager_menu ;;
-                    5) nft_creator_menu ;;
-                    6) smart_contract_menu ;;
-                    7) advanced_options_menu ;;
-                    8) trading_menu ;;
-                    9) source_code_menu ;;
-                    10) documentation_menu ;;
-                    11) upgrade_menu ;;
-                    12) custom_token_menu ;;
-                    13) bridge_menu ;;
-                    14) security_menu ;;
-                    15) analytics_menu ;;
-                    *) 
-                        echo "Invalid selection."
-                        sleep 1
-                        continue
-                        ;;
-                esac
-                ;;
-            [Qq]) 
-                echo "Exiting..."
-                exit 0 
-                ;;
-            *) 
-                echo "Invalid selection."
-                sleep 1
-                continue
-                ;;
-        esac
-    done
-}
-
-# Remove any duplicate menu functions
-# ...existing code...
-
-###############################################################################
-# Menu Navigation Functions
-###############################################################################
-
-# Define return value for menu exits
-MENU_RETURN=0
-
-# Helper function to validate numeric input
-validate_number() {
-    local input=$1
-    local min=$2
-    local max=$3
-    if ! [[ "$input" =~ ^[0-9]+$ ]] || (( input < min || input > max )); then
-        return 1
-    fi
-    return 0
-}
-
-# Helper function to safely return from submenus
-return_to_main() {
-    MENU_RETURN=1
-    return 0
-}
-
-# Base menu display function
-display_menu() {
-    local title=$1
-    local options=("${@:2}")
-    
-    print_header
-    echo "$title"
-    echo "----------------------"
-    local i=1
-    for opt in "${options[@]}"; do
-        echo "$i. $opt"
-        ((i++))
-    done
-    echo "M. Return to Main Menu"
-    echo
-}
-
-###############################################################################
-# Main Menu Display Functions - Fixed
-###############################################################################
-display_menu_row() {
-    local start_idx=$1
     local max_cols=3
     local col_width=35
     
@@ -2751,71 +2590,61 @@ display_menu_row() {
 
 main_menu() {
     CURRENT_PAGE=1
-    MENU_RETURN=0
-    
     while true; do
         print_header
         echo "Setec's Labs: Solana AIO Token Manager"
         echo "Type M at any time to return to this menu"
         echo
 
-        # Calculate page bounds
-        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
-        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
-        [[ $end_idx -gt $MAX_ITEMS ]] && end_idx=$MAX_ITEMS
-
         # Display menu items
+        local start_idx=$(( (CURRENT_PAGE-1) * 9 + 1 ))
+        local end_idx=$((CURRENT_PAGE * 9))
+        [[ $end_idx -gt 15 ]] && end_idx=15
+
         for ((i=start_idx; i<=end_idx; i+=3)); do
             display_menu_row "$i"
         done
         
         echo
-        echo -n "Navigation: "
-        [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
-        [[ $((CURRENT_PAGE * ITEMS_PER_PAGE)) -lt $MAX_ITEMS ]] && echo -n "N-Next  "
+        if ((CURRENT_PAGE > 1)); then
+            echo -n "P-Previous  "
+        fi
+        if ((CURRENT_PAGE * 9 < 15)); then
+            echo -n "N-Next  "
+        fi
         echo "Q-Quit"
         echo
 
         read -p "Enter your choice: " main_choice
-
-        # Clear previous errors
-        clear_error
-
         case "$main_choice" in
             [Nn]) 
-                if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
+                if ((CURRENT_PAGE * 9 < 15)); then
                     ((CURRENT_PAGE++))
                 fi
-                continue
                 ;;
             [Pp])
                 if ((CURRENT_PAGE > 1)); then
                     ((CURRENT_PAGE--))
                 fi
-                continue
                 ;;
             [1-9]|1[0-5]) 
-                if ! validate_number "$main_choice" 1 15; then
-                    show_error "Invalid selection"
-                    continue
-                fi
-
                 case "$main_choice" in
-                    1) setup_environment_menu || continue ;;
-                    2) wallet_management_menu || continue ;;
-                    3) token_creator_menu || continue ;;
-                    4) token_manager_menu || continue ;;
-                    5) nft_creator_menu || continue ;;
-                    6) smart_contract_menu || continue ;;
-                    7) advanced_options_menu || continue ;;
-                    8) trading_menu || continue ;;
-                    9) source_code_menu || continue ;;
-                    10) documentation_menu || continue ;;
-                    11) upgrade_menu || continue ;;
-                    12) custom_token_menu || continue ;;
-                    13) bridge_menu || continue ;;
-                    14) security_menu || continue ;;
-                    15) analytics_menu || continue ;;
+                    1) setup_environment_menu ;;
+                    2) wallet_management_menu ;;
+                    3) token_creator_menu ;;
+                    4) token_manager_menu ;;
+                    5) nft_creator_menu ;;
+                    6) smart_contract_menu ;;
+                    7) advanced_options_menu ;;
+                    8) trading_menu ;;
+                    9) source_code_menu ;;
+                    10) documentation_menu ;;
+                    11) upgrade_menu ;;
+                    12) custom_token_menu ;;
+                    13) bridge_menu ;;
+                    14) security_menu ;;
+                    15) analytics_menu ;;
+                    *) echo "Invalid selection." ;;
                 esac
                 ;;
             [Qq]) 
@@ -2823,34 +2652,14 @@ main_menu() {
                 exit 0 
                 ;;
             [Mm]) 
-                # Already at main menu, just refresh
                 continue 
                 ;;
             *) 
-                show_error "Invalid selection"
-                continue
+                echo "Invalid selection."
+                sleep 1
                 ;;
         esac
-
-        # Reset menu return flag
-        MENU_RETURN=0
     done
 }
 
-###############################################################################
-# Error Handling Functions
-###############################################################################
-LAST_ERROR=""
-
-show_error() {
-    LAST_ERROR="$1"
-    echo -e "${RED}Error: $LAST_ERROR${NC}"
-    sleep 1
-}
-
-clear_error() {
-    LAST_ERROR=""
-}
-
-# ...existing code...
 

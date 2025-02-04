@@ -2585,63 +2585,67 @@ display_menu_row() {
     echo
 }
 
+# Define security and analytics menus at the top level
+security_menu() {
+    print_header
+    echo "Security Center"
+    echo "--------------"
+    echo "Coming soon..."
+    pause
+}
+
+analytics_menu() {
+    print_header
+    echo "Analytics Dashboard"
+    echo "------------------"
+    echo "Coming soon..."
+    pause
+}
+
+# Main menu with fixed navigation and error handling
 main_menu() {
+    CURRENT_PAGE=1
     while true; do
         print_header
         echo "Setec's Labs: Solana AIO Token Manager"
         echo "Type M at any submenu to return here."
         echo
-        
-        # Calculate page bounds
+
+        # Calculate page bounds with bounds checking
         local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
         local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
-        
+        [[ $end_idx -gt $MAX_ITEMS ]] && end_idx=$MAX_ITEMS
+
         # Display menu in 3 columns
         for ((i=start_idx; i<=end_idx; i+=3)); do
             display_menu_row "$i"
         done
-        
+
         echo
-        echo "N. Next Page    P. Previous Page    Q. Quit"
+        # Only show navigation options if needed
+        [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P. Previous Page    "
+        [[ $((CURRENT_PAGE * ITEMS_PER_PAGE)) -lt $MAX_ITEMS ]] && echo -n "N. Next Page    "
+        echo "Q. Quit"
         echo
-        
+
         read -p "Enter your choice: " main_choice
-
-        # Add helper functions for security and analytics menus if they don't exist
-        security_menu() {
-            print_header
-            echo "Security Center"
-            echo "Coming soon..."
-            pause
-        }
-
-        analytics_menu() {
-            print_header
-            echo "Analytics Dashboard"
-            echo "Coming soon..."
-            pause
-        }
 
         case "$main_choice" in
             [Nn]) 
                 if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
                     ((CURRENT_PAGE++))
                 fi
+                continue
                 ;;
             [Pp])
                 if ((CURRENT_PAGE > 1)); then
                     ((CURRENT_PAGE--))
                 fi
+                continue
                 ;;
             [1-9]|1[0-5]) 
-                if ! [[ "$main_choice" =~ ^[0-9]+$ ]]; then
-                    echo "Invalid selection."
-                    sleep 1
-                    continue
-                fi
-                
                 selection=$((main_choice))
-                if (( selection < 1 || selection > 15 )); then
+                if (( selection < 1 || selection > MAX_ITEMS )); then
                     echo "Invalid menu option."
                     sleep 1
                     continue
@@ -2666,6 +2670,7 @@ main_menu() {
                     *) 
                         echo "Invalid selection."
                         sleep 1
+                        continue
                         ;;
                 esac
                 ;;
@@ -2673,9 +2678,10 @@ main_menu() {
                 echo "Exiting..."
                 exit 0 
                 ;;
-            *)  
+            *) 
                 echo "Invalid selection."
                 sleep 1
+                continue
                 ;;
         esac
     done

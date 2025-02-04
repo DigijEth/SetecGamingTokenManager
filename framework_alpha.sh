@@ -1049,21 +1049,21 @@ main_menu() {
 get_menu_item() {
     local idx=$1
     case $idx in
-        1)  echo "1. Setup Environment" ;;
-        2)  echo "2. Wallet Management" ;;
-        3)  echo "3. Token Creator" ;;
-        4)  echo "4. Token Manager" ;;
-        5)  echo "5. NFT Creator" ;;
-        6)  echo "6. Smart Contract Manager" ;;
-        7)  echo "7. Advanced Options" ;;
-        8)  echo "8. Trading & Bot Management" ;;
-        9)  echo "9. Source Code Manager" ;;
-        10) echo "10. Documentation Generator" ;;
-        11) echo "11. Contract Upgrade Tools" ;;
-        12) echo "12. Custom Token Standards" ;;
-        13) echo "13. Cross-chain Bridge" ;;
-        14) echo "14. Security Center" ;;
-        15) echo "15. Analytics Dashboard" ;;
+        1)  echo "Setup Environment" ;;
+        2)  echo "Wallet Management" ;;
+        3)  echo "Token Creator" ;;
+        4)  echo "Token Manager" ;;
+        5)  echo "NFT Creator" ;;
+        6)  echo "Smart Contract Manager" ;;
+        7)  echo "Advanced Options" ;;
+        8)  echo "Trading & Bot Management" ;;
+        9)  echo "Source Code Manager" ;;
+        10) echo "Documentation Generator" ;;
+        11) echo "Contract Upgrade Tools" ;;
+        12) echo "Custom Token Standards" ;;
+        13) echo "Cross-chain Bridge" ;;
+        14) echo "Security Center" ;;
+        15) echo "Analytics Dashboard" ;;
         *) echo "" ;;
     esac
 }
@@ -2579,7 +2579,7 @@ display_menu_row() {
         local item_num=$((start_idx + i))
         local item_text=$(get_menu_item $item_num)
         if [ -n "$item_text" ]; then
-            printf "%-2d. %-25s" "$item_num" "$item_text"
+            printf "%2d. %-30s" "$item_num" "$item_text"
         fi
     done
     echo
@@ -2606,6 +2606,22 @@ main_menu() {
         echo
         
         read -p "Enter your choice: " main_choice
+
+        # Add helper functions for security and analytics menus if they don't exist
+        security_menu() {
+            print_header
+            echo "Security Center"
+            echo "Coming soon..."
+            pause
+        }
+
+        analytics_menu() {
+            print_header
+            echo "Analytics Dashboard"
+            echo "Coming soon..."
+            pause
+        }
+
         case "$main_choice" in
             [Nn]) 
                 if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
@@ -2617,8 +2633,21 @@ main_menu() {
                     ((CURRENT_PAGE--))
                 fi
                 ;;
-            [1-9]|1[0-5]) # Handle menu options 1-15
-                case "$main_choice" in
+            [1-9]|1[0-5]) 
+                if ! [[ "$main_choice" =~ ^[0-9]+$ ]]; then
+                    echo "Invalid selection."
+                    sleep 1
+                    continue
+                fi
+                
+                selection=$((main_choice))
+                if (( selection < 1 || selection > 15 )); then
+                    echo "Invalid menu option."
+                    sleep 1
+                    continue
+                fi
+
+                case $selection in
                     1) setup_environment_menu ;;
                     2) wallet_management_menu ;;
                     3) token_creator_menu ;;
@@ -2634,19 +2663,24 @@ main_menu() {
                     13) bridge_menu ;;
                     14) security_menu ;;
                     15) analytics_menu ;;
+                    *) 
+                        echo "Invalid selection."
+                        sleep 1
+                        ;;
                 esac
                 ;;
-            [Qq]) echo "Exiting..."; exit 0 ;;
-            *) echo "Invalid selection." ; sleep 1 ;;
+            [Qq]) 
+                echo "Exiting..."
+                exit 0 
+                ;;
+            *)  
+                echo "Invalid selection."
+                sleep 1
+                ;;
         esac
     done
 }
 
-# Remove the duplicate main_menu and other redundant menu display functions
-# Delete these functions if they exist elsewhere in the code:
-# - get_menu_title()
-# - display_menu_item()
-# - The second main_menu() function
-
+# Remove any duplicate menu functions
 # ...existing code...
 

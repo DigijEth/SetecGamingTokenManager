@@ -958,11 +958,47 @@ create_dao() {
 }
 
 ###############################################################################
-# Main Menu
+# Menu Display Functions
 ###############################################################################
+get_menu_item() {
+    case $1 in
+        1)  echo "1. Setup Environment" ;;
+        2)  echo "2. Wallet Management" ;;
+        3)  echo "3. Token Creator" ;;
+        4)  echo "4. Token Manager" ;;
+        5)  echo "5. NFT Creator" ;;
+        6)  echo "6. Smart Contract Manager" ;;
+        7)  echo "7. Advanced Options" ;;
+        8)  echo "8. Trading & Bot Management" ;;
+        9)  echo "9. Source Code Manager" ;;
+        10) echo "10. Documentation Generator" ;;
+        11) echo "11. Contract Upgrade Tools" ;;
+        12) echo "12. Custom Token Standards" ;;
+        13) echo "13. Cross-chain Bridge" ;;
+        14) echo "14. Security Center" ;;
+        15) echo "15. Analytics Dashboard" ;;
+        *) echo "" ;;
+    esac
+}
+
+display_menu_row() {
+    local start_idx=$1
+    local col_width=38  # Width for 2 columns
+    
+    # Display two items per row
+    for i in {0..1}; do
+        local item_num=$((start_idx + i))
+        local menu_item=$(get_menu_item $item_num)
+        if [ -n "$menu_item" ]; then
+            printf "%-${col_width}s" "$menu_item"
+        fi
+    done
+    echo
+}
+
 main_menu() {
     CURRENT_PAGE=1
-    local PAGE_SIZE=8  # 4 rows x 2 columns
+    local PAGE_SIZE=8  # Display 4 rows x 2 columns per page
     local TOTAL_ITEMS=15
 
     while true; do
@@ -976,12 +1012,15 @@ main_menu() {
         local end_idx=$((CURRENT_PAGE * PAGE_SIZE))
         [[ $end_idx -gt $TOTAL_ITEMS ]] && end_idx=$TOTAL_ITEMS
 
-        # Display menu items in 2 columns
+        # Display menu in 2 columns
         for ((i=start_idx; i<=end_idx; i+=2)); do
-            display_menu_row "$i"
+            if [ $i -le $TOTAL_ITEMS ]; then
+                display_menu_row "$i"
+            fi
         done
-        
+
         echo
+        # Navigation options
         echo -n "Navigation: "
         [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
         [[ $((CURRENT_PAGE * PAGE_SIZE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
@@ -989,6 +1028,7 @@ main_menu() {
         echo
 
         read -p "Enter your choice: " main_choice
+        
         case "$main_choice" in
             [Nn]) 
                 if ((CURRENT_PAGE * PAGE_SIZE < TOTAL_ITEMS)); then
@@ -1000,126 +1040,39 @@ main_menu() {
                     ((CURRENT_PAGE--))
                 fi
                 ;;
-            [1-9]|1[0-5]) 
-                if ! [[ "$main_choice" =~ ^[0-9]+$ ]] || (( main_choice < 1 || main_choice > TOTAL_ITEMS )); then
+            [1-9]|1[0-5])
+                # Check if selection is valid
+                if ((main_choice >= 1 && main_choice <= TOTAL_ITEMS)); then
+                    case $main_choice in
+                        1) setup_environment_menu ;;
+                        2) wallet_management_menu ;;
+                        3) token_creator_menu ;;
+                        4) token_manager_menu ;;
+                        5) nft_creator_menu ;;
+                        6) smart_contract_menu ;;
+                        7) advanced_options_menu ;;
+                        8) trading_menu ;;
+                        9) source_code_menu ;;
+                        10) documentation_menu ;;
+                        11) upgrade_menu ;;
+                        12) custom_token_menu ;;
+                        13) bridge_menu ;;
+                        14) security_menu ;;
+                        15) analytics_menu ;;
+                    esac
+                else
                     echo "Invalid selection."
                     sleep 1
-                    continue
                 fi
-                
-                # Execute submenu function
-                case $main_choice in
-                    1) setup_environment_menu || true ;;
-                    2) wallet_management_menu || true ;;
-                    3) token_creator_menu || true ;;
-                    4) token_manager_menu || true ;;
-                    5) nft_creator_menu || true ;;
-                    6) smart_contract_menu || true ;;
-                    7) advanced_options_menu || true ;;
-                    8) trading_menu || true ;;
-                    9) source_code_menu || true ;;
-                    10) documentation_menu || true ;;
-                    11) upgrade_menu || true ;;
-                    12) custom_token_menu || true ;;
-                    13) bridge_menu || true ;;
-                    14) security_menu || true ;;
-                    15) analytics_menu || true ;;
-                esac
                 ;;
             [Qq]) 
                 echo "Exiting..."
                 exit 0 
                 ;;
-            [Mm]) 
-                continue 
-                ;;
-            *) 
+            *)
                 echo "Invalid selection."
                 sleep 1
                 ;;
-        esac
-    done
-}
-
-get_menu_item() {
-    case $1 in
-        1)  echo "Setup Environment" ;;
-        2)  echo "Wallet Management" ;;
-        3)  echo "Token Creator" ;;
-        4)  echo "Token Manager" ;;
-        5)  echo "NFT Creator" ;;
-        6)  echo "Smart Contract Manager" ;;
-        7)  echo "Advanced Options" ;;
-        8)  echo "Trading & Bot Management" ;;
-        9)  echo "Source Code Manager" ;;
-        10) echo "Documentation Generator" ;;
-        11) echo "Contract Upgrade Tools" ;;
-        12) echo "Custom Token Standards" ;;
-        13) echo "Cross-chain Bridge" ;;
-        14) echo "Security Center" ;;
-        15) echo "Analytics Dashboard" ;;
-        *) echo "" ;;
-    esac
-}
-
-display_menu_row() {
-    local start_idx=$1
-    local col_width=38  # Width for 2 columns
-    
-    # Display two items per row
-    for i in {0..1}; do
-        local item_num=$((start_idx + i))
-        local item_text=$(get_menu_item $item_num)
-        if [ -n "$item_text" ]; then
-            printf "%2d. %-${col_width}s" "$item_num" "$item_text"
-        fi
-    done
-    echo
-}
-
-# Helper function for all submenus
-submenu() {
-    local title=$1
-    shift
-    local options=("$@")
-    
-    while true; do
-        print_header
-        echo "$title"
-        echo "------------------------"
-        local i=1
-        for opt in "${options[@]}"; do
-            echo "$i. $opt"
-            ((i++))
-        done
-        echo "M. Return to Main Menu"
-        
-        read -p "Enter your choice: " choice
-        if [[ "$choice" == [Mm] ]]; then
-            return 0
-        fi
-        
-        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice > 0 && choice <= ${#options[@]} )); then
-            return "$choice"
-        else
-            echo "Invalid selection. Try again."
-            sleep 1
-        fi
-    done
-}
-
-# Example submenu implementation:
-setup_environment_menu() {
-    while true; do
-        local options=("Dependency Installation/Check" "Select Network")
-        submenu "Setup Environment Menu" "${options[@]}"
-        local status=$?
-        
-        case $status in
-            0) return 0 ;;  # Return to main menu
-            1) dependency_menu ;;
-            2) select_network_menu ;;
-            *) continue ;;
         esac
     done
 }

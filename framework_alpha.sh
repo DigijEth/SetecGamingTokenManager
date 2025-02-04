@@ -2552,18 +2552,17 @@ manage_bridge_liquidity() {
 ###############################################################################
 # Menu Display Functions
 ###############################################################################
-get_menu_title() {
-    local idx=$1
-    case $idx in
-        1)  echo "Setup Environment" ;;
-        2)  echo "Wallet Management" ;;
-        3)  echo "Token Creator" ;;
-        4)  echo "Token Manager" ;;
-        5)  echo "NFT Creator" ;;
-        6)  echo "Smart Contract Manager" ;;
-        7)  echo "Advanced Options" ;;
-        8)  echo "Trading & Bot Management" ;;
-        9)  echo "Source Code Manager" ;;
+get_menu_item() {
+    case $1 in
+        1) echo "Setup Environment" ;;
+        2) echo "Wallet Management" ;;
+        3) echo "Token Creator" ;;
+        4) echo "Token Manager" ;;
+        5) echo "NFT Creator" ;;
+        6) echo "Smart Contract Manager" ;;
+        7) echo "Advanced Options" ;;
+        8) echo "Trading & Bot Management" ;;
+        9) echo "Source Code Manager" ;;
         10) echo "Documentation Generator" ;;
         11) echo "Contract Upgrade Tools" ;;
         12) echo "Custom Token Standards" ;;
@@ -2574,21 +2573,15 @@ get_menu_title() {
     esac
 }
 
-display_menu_item() {
-    local number=$1
-    local title
-    title=$(get_menu_title "$number")
-    if [ -n "$title" ]; then
-        printf "%-2s. %-30s" "$number" "$title"
-    fi
-}
-
 display_menu_row() {
     local start_idx=$1
-    # Display menu items
-    display_menu_item "$start_idx"
-    display_menu_item "$((start_idx+1))"
-    display_menu_item "$((start_idx+2))"
+    for i in {0..2}; do
+        local item_num=$((start_idx + i))
+        local item_text=$(get_menu_item $item_num)
+        if [ -n "$item_text" ]; then
+            printf "%-2d. %-25s" "$item_num" "$item_text"
+        fi
+    done
     echo
 }
 
@@ -2603,13 +2596,13 @@ main_menu() {
         local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
         local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
         
-        # Display menu in 3 columns, 5 rows per page
+        # Display menu in 3 columns
         for ((i=start_idx; i<=end_idx; i+=3)); do
             display_menu_row "$i"
         done
         
-        # Navigation options
-        echo -e "N. Next Page    P. Previous Page    Q. Quit"
+        echo
+        echo "N. Next Page    P. Previous Page    Q. Quit"
         echo
         
         read -p "Enter your choice: " main_choice
@@ -2624,22 +2617,36 @@ main_menu() {
                     ((CURRENT_PAGE--))
                 fi
                 ;;
-            1) setup_environment_menu ;;
-            2) wallet_management_menu ;;
-            3) token_creator_menu ;;
-            4) token_manager_menu ;;
-            5) nft_creator_menu ;;          # New
-            6) smart_contract_menu ;;       # New
-            7) advanced_options_menu ;;
-            8) trading_menu ;;
-            9) source_code_menu ;;          # New
-            10) documentation_menu ;;       # New
-            11) upgrade_menu ;;             # New
-            12) custom_token_menu ;;        # New
-            13) bridge_menu ;;              # New
+            [1-9]|1[0-5]) # Handle menu options 1-15
+                case "$main_choice" in
+                    1) setup_environment_menu ;;
+                    2) wallet_management_menu ;;
+                    3) token_creator_menu ;;
+                    4) token_manager_menu ;;
+                    5) nft_creator_menu ;;
+                    6) smart_contract_menu ;;
+                    7) advanced_options_menu ;;
+                    8) trading_menu ;;
+                    9) source_code_menu ;;
+                    10) documentation_menu ;;
+                    11) upgrade_menu ;;
+                    12) custom_token_menu ;;
+                    13) bridge_menu ;;
+                    14) security_menu ;;
+                    15) analytics_menu ;;
+                esac
+                ;;
             [Qq]) echo "Exiting..."; exit 0 ;;
             *) echo "Invalid selection." ; sleep 1 ;;
         esac
     done
 }
+
+# Remove the duplicate main_menu and other redundant menu display functions
+# Delete these functions if they exist elsewhere in the code:
+# - get_menu_title()
+# - display_menu_item()
+# - The second main_menu() function
+
+# ...existing code...
 

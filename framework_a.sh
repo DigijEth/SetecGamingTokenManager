@@ -958,10 +958,68 @@ create_dao() {
 }
 
 ###############################################################################
-# Menu Display Functions
+# Main Menu
 ###############################################################################
+main_menu() {
+    while true; do
+        print_header
+        echo "Setec's Labs: Solana AIO Token Manager"
+        echo "Type M at any submenu to return here."
+        echo ""
+        
+        # Calculate page bounds
+        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
+        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
+        
+        # Display menu in 3 columns, 5 items each
+        for ((i=start_idx; i<=end_idx; i+=5)); do
+            printf "%-25s %-25s %-25s\n" \
+                "$(get_menu_item $i)" \
+                "$(get_menu_item $((i+1)))" \
+                "$(get_menu_item $((i+2)))"
+            printf "%-25s %-25s %-25s\n" \
+                "$(get_menu_tooltip $i)" \
+                "$(get_menu_tooltip $((i+1)))" \
+                "$(get_menu_tooltip $((i+2)))"
+            echo ""
+        done
+        
+        echo "N. Next Page    P. Previous Page    Q. Quit"
+        
+        read -p "Enter your choice: " main_choice
+        case "$main_choice" in
+            [Nn]) 
+                if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
+                    ((CURRENT_PAGE++))
+                fi
+                ;;
+            [Pp])
+                if ((CURRENT_PAGE > 1)); then
+                    ((CURRENT_PAGE--))
+                fi
+                ;;
+            1) setup_environment_menu ;;
+            2) wallet_management_menu ;;
+            3) token_creator_menu ;;
+            4) token_manager_menu ;;
+            5) nft_creator_menu ;;          # New
+            6) smart_contract_menu ;;       # New
+            7) advanced_options_menu ;;
+            8) trading_menu ;;
+            9) source_code_menu ;;          # New
+            10) documentation_menu ;;       # New
+            11) upgrade_menu ;;             # New
+            12) custom_token_menu ;;        # New
+            13) bridge_menu ;;              # New
+            [Qq]) echo "Exiting..."; exit 0 ;;
+            *) echo "Invalid selection." ; sleep 1 ;;
+        esac
+    done
+}
+
 get_menu_item() {
-    case $1 in
+    local idx=$1
+    case $idx in
         1)  echo "1. Setup Environment" ;;
         2)  echo "2. Wallet Management" ;;
         3)  echo "3. Token Creator" ;;
@@ -981,100 +1039,26 @@ get_menu_item() {
     esac
 }
 
-display_menu_row() {
-    local start_idx=$1
-    local col_width=38  # Width for 2 columns
-    
-    # Display two items per row
-    for i in {0..1}; do
-        local item_num=$((start_idx + i))
-        local menu_item=$(get_menu_item $item_num)
-        if [ -n "$menu_item" ]; then
-            printf "%-${col_width}s" "$menu_item"
-        fi
-    done
-    echo
-}
-
-main_menu() {
-    CURRENT_PAGE=1
-    local PAGE_SIZE=8  # Display 4 rows x 2 columns per page
-    local TOTAL_ITEMS=15
-
-    while true; do
-        print_header
-        echo "Setec's Labs: Solana AIO Token Manager"
-        echo "Type M at any time to return to this menu"
-        echo
-
-        # Calculate page bounds
-        local start_idx=$(( (CURRENT_PAGE-1) * PAGE_SIZE + 1 ))
-        local end_idx=$((CURRENT_PAGE * PAGE_SIZE))
-        [[ $end_idx -gt $TOTAL_ITEMS ]] && end_idx=$TOTAL_ITEMS
-
-        # Display menu in 2 columns
-        for ((i=start_idx; i<=end_idx; i+=2)); do
-            if [ $i -le $TOTAL_ITEMS ]; then
-                display_menu_row "$i"
-            fi
-        done
-
-        echo
-        # Navigation options
-        echo -n "Navigation: "
-        [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
-        [[ $((CURRENT_PAGE * PAGE_SIZE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
-        echo "Q-Quit"
-        echo
-
-        read -p "Enter your choice: " main_choice
-        
-        case "$main_choice" in
-            [Nn]) 
-                if ((CURRENT_PAGE * PAGE_SIZE < TOTAL_ITEMS)); then
-                    ((CURRENT_PAGE++))
-                fi
-                ;;
-            [Pp])
-                if ((CURRENT_PAGE > 1)); then
-                    ((CURRENT_PAGE--))
-                fi
-                ;;
-            [1-9]|1[0-5])
-                # Check if selection is valid
-                if ((main_choice >= 1 && main_choice <= TOTAL_ITEMS)); then
-                    case $main_choice in
-                        1) setup_environment_menu ;;
-                        2) wallet_management_menu ;;
-                        3) token_creator_menu ;;
-                        4) token_manager_menu ;;
-                        5) nft_creator_menu ;;
-                        6) smart_contract_menu ;;
-                        7) advanced_options_menu ;;
-                        8) trading_menu ;;
-                        9) source_code_menu ;;
-                        10) documentation_menu ;;
-                        11) upgrade_menu ;;
-                        12) custom_token_menu ;;
-                        13) bridge_menu ;;
-                        14) security_menu ;;
-                        15) analytics_menu ;;
-                    esac
-                else
-                    echo "Invalid selection."
-                    sleep 1
-                fi
-                ;;
-            [Qq]) 
-                echo "Exiting..."
-                exit 0 
-                ;;
-            *)
-                echo "Invalid selection."
-                sleep 1
-                ;;
-        esac
-    done
+get_menu_tooltip() {
+    local idx=$1
+    case $idx in
+        1)  echo "    Configure environment and dependencies" ;;
+        2)  echo "    Manage wallets and connections" ;;
+        3)  echo "    Create and configure new tokens" ;;
+        4)  echo "    Manage existing tokens" ;;
+        5)  echo "    Create and manage NFTs" ;;
+        6)  echo "    Deploy and manage smart contracts" ;;
+        7)  echo "    Advanced protocol features" ;;
+        8)  echo "    Trading bots and automation" ;;
+        9)  echo "    Manage contract source code" ;;
+        10) echo "    Generate documentation" ;;
+        11) echo "    Upgrade contract tools" ;;
+        12) echo "    Custom token standard tools" ;;
+        13) echo "    Cross-chain bridge operations" ;;
+        14) echo "    Security and access control" ;;
+        15) echo "    View analytics and metrics" ;;
+        *) echo "" ;;
+    esac
 }
 
 ###############################################################################
@@ -2497,4 +2481,216 @@ manage_bridge_liquidity() {
         esac
     fi
 }
+
+###############################################################################
+# Menu System Functions
+###############################################################################
+MENU_WIDTH=75
+MENU_INDENT=2
+PAGE_SIZE=8  # Display 4 rows x 2 columns
+TOTAL_ITEMS=15
+
+# Print centered text with optional decoration
+print_centered() {
+    local text="$1"
+    local width="$2"
+    local pad=$(( (width - ${#text}) / 2 ))
+    printf "%${pad}s%s%${pad}s\n" "" "$text" ""
+}
+
+# Print menu header with title
+print_menu_header() {
+    local title="$1"
+    echo
+    print_centered "$title" $MENU_WIDTH
+    printf "%${MENU_WIDTH}s\n" "" | tr ' ' '-'
+}
+
+# Print menu item with proper formatting
+print_menu_item() {
+    local number="$1"
+    local text="$2"
+    printf "%${MENU_INDENT}s%2d. %-${MENU_WIDTH}s\n" "" "$number" "$text"
+}
+
+# Display a standard submenu
+display_submenu() {
+    local title="$1"
+    shift
+    local options=("$@")
+    
+    print_header
+    print_menu_header "$title"
+    
+    local i=1
+    for opt in "${options[@]}"; do
+        print_menu_item $i "$opt"
+        ((i++))
+    done
+    echo
+    print_menu_item "M" "Return to Main Menu"
+}
+
+# Handle submenu input with standardized validation
+handle_submenu_input() {
+    local max_options=$1
+    local choice
+    
+    read -p "Enter your choice: " choice
+    
+    if [[ "$choice" == [Mm] ]]; then
+        return 0
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice > 0 && choice <= max_options )); then
+        return "$choice"
+    else
+        echo "Invalid selection. Try again."
+        sleep 1
+        return 255
+    fi
+}
+
+# Display main menu page
+display_main_menu_page() {
+    local start_idx=$(( (CURRENT_PAGE-1) * PAGE_SIZE + 1 ))
+    local end_idx=$((CURRENT_PAGE * PAGE_SIZE))
+    [[ $end_idx -gt $TOTAL_ITEMS ]] && end_idx=$TOTAL_ITEMS
+
+    print_header
+    print_menu_header "Setec's Labs: Solana AIO Token Manager"
+    echo "Type M at any time to return to this menu"
+    echo
+
+    # Display menu items in 2 columns
+    for ((i=start_idx; i<=end_idx; i+=2)); do
+        if [ $i -le $TOTAL_ITEMS ]; then
+            display_menu_row "$i"
+        fi
+    done
+    
+    echo
+    echo -n "Navigation: "
+    [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
+    [[ $((CURRENT_PAGE * PAGE_SIZE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
+    echo "Q-Quit"
+    echo
+}
+
+# Display a menu row (2 columns)
+display_menu_row() {
+    local start_idx=$1
+    local col_width=38
+    
+    for i in {0..1}; do
+        local item_num=$((start_idx + i))
+        if [ $item_num -le $TOTAL_ITEMS ]; then
+            printf "%2d. %-${col_width}s" "$item_num" "$(get_menu_option $item_num)"
+        fi
+    done
+    echo
+}
+
+# Get menu option text
+get_menu_option() {
+    case $1 in
+        1)  echo "Setup Environment" ;;
+        2)  echo "Wallet Management" ;;
+        3)  echo "Token Creator" ;;
+        4)  echo "Token Manager" ;;
+        5)  echo "NFT Creator" ;;
+        6)  echo "Smart Contract Manager" ;;
+        7)  echo "Advanced Options" ;;
+        8)  echo "Trading & Bot Management" ;;
+        9)  echo "Source Code Manager" ;;
+        10) echo "Documentation Generator" ;;
+        11) echo "Contract Upgrade Tools" ;;
+        12) echo "Custom Token Standards" ;;
+        13) echo "Cross-chain Bridge" ;;
+        14) echo "Security Center" ;;
+        15) echo "Analytics Dashboard" ;;
+        *)  echo "" ;;
+    esac
+}
+
+# Main menu loop
+main_menu() {
+    CURRENT_PAGE=1
+    
+    while true; do
+        display_main_menu_page
+        
+        read -p "Enter your choice: " main_choice
+        
+        case "$main_choice" in
+            [Nn]) 
+                if ((CURRENT_PAGE * PAGE_SIZE < TOTAL_ITEMS)); then
+                    ((CURRENT_PAGE++))
+                fi
+                ;;
+            [Pp])
+                if ((CURRENT_PAGE > 1)); then
+                    ((CURRENT_PAGE--))
+                fi
+                ;;
+            [1-9]|1[0-5])
+                if ((main_choice >= 1 && main_choice <= TOTAL_ITEMS)); then
+                    # Execute submenu with error handling
+                    case $main_choice in
+                        1) setup_environment_menu || true ;;
+                        2) wallet_management_menu || true ;;
+                        3) token_creator_menu || true ;;
+                        4) token_manager_menu || true ;;
+                        5) nft_creator_menu || true ;;
+                        6) smart_contract_menu || true ;;
+                        7) advanced_options_menu || true ;;
+                        8) trading_menu || true ;;
+                        9) source_code_menu || true ;;
+                        10) documentation_menu || true ;;
+                        11) upgrade_menu || true ;;
+                        12) custom_token_menu || true ;;
+                        13) bridge_menu || true ;;
+                        14) security_menu || true ;;
+                        15) analytics_menu || true ;;
+                    esac
+                else
+                    echo "Invalid selection."
+                    sleep 1
+                fi
+                ;;
+            [Qq])
+                echo "Exiting..."
+                exit 0
+                ;;
+            [Mm])
+                continue
+                ;;
+            *)
+                echo "Invalid selection."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# Example of a standardized submenu implementation
+setup_environment_menu() {
+    local options=(
+        "Dependency Installation/Check"
+        "Select Network"
+    )
+    
+    while true; do
+        display_submenu "Setup Environment Menu" "${options[@]}"
+        handle_submenu_input ${#options[@]}
+        local status=$?
+        
+        case $status in
+            0) return 0 ;;  # Return to main menu
+            1) dependency_menu ;;
+            2) select_network_menu ;;
+            255) continue ;;  # Invalid input
+        esac
+    done
+}
+
+# ... existing code for other functions ...
 

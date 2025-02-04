@@ -19,6 +19,9 @@ RED='\033[0;31m'
 NC='\033[0m'
 NETWORK_URL="https://api.devnet.solana.com"  # default network: Devnet
 ACTIVE_WALLET=""
+ENCRYPTED_ENV=".env.encrypted"
+API_CONFIG=".api_config"
+IMAGE_DIR="./images"
 
 ###############################################################################
 # Utility Functions
@@ -90,7 +93,8 @@ dependency_menu() {
     echo " 5. vercel CLI            : $(check_installed vercel)"
     echo " 6. Solana CLI            : $(check_installed solana)"
     echo " 7. spl-token CLI         : $(check_installed spl-token)"
-    echo " 8. Metaplex CLI          : $(check_installed metaplex)"
+    echo " 8. Metaplex Sugar CLI    : $(check_installed sugar)"
+    echo " 9. Openbook DEX CLI      : $(check_installed openbook)"
     echo ""
     echo "Type 'A' to install all, 'R' for recommended, or list numbers separated by commas (e.g., 1,3,5)."
     echo "M. Return to Setup Environment Menu"
@@ -105,7 +109,7 @@ dependency_menu() {
             install_metaplex
             ;;
         R|r)
-            # Recommended: Node.js + npm, Rust, Solana CLI (stable), spl-token CLI, Anchor CLI, and Metaplex CLI.
+            # Recommended: Node.js + npm, Rust, Solana CLI (stable), spl-token CLI, Anchor CLI, and Metaplex Sugar CLI.
             verify_or_install "node" "nodejs"
             if ! command -v cargo &>/dev/null; then
                 sudo apt-get update && sudo apt-get install -y cargo
@@ -144,7 +148,16 @@ dependency_menu() {
                             cargo install spl-token-cli
                         fi
                         ;;
-                    8) install_metaplex ;;
+                     8)
+                        if ! command -v sugar &>/dev/null; then
+                            bash <(curl -sSf https://sugar.metaplex.com/install.sh)
+                        fi
+                        ;;
+                    9)
+                        if ! command -v openbook &>/dev/null; then
+                            cargo install openbook-dex-cli
+                        fi
+                        ;;
                     *)
                         echo "Invalid selection: $sel"
                         ;;
@@ -216,6 +229,15 @@ check_dependencies() {
             echo -e "${RED}Skipping spl-token CLI dependency check. Proceeding anyway (expect failures).${NC}"
         fi
     fi
+    if ! command -v openbook &>/dev/null; then
+        echo -e "${RED}Openbook DEX CLI not found.${NC}"
+        read -p "Install via cargo? (y/n): " OPENBOOK_INSTALL
+        if [[ "$OPENBOOK_INSTALL" == "y" ]]; then
+            cargo install openbook-dex-cli
+        else
+            echo -e "${RED}Skipping Openbook DEX CLI installation. Market creation will not be available.${NC}"
+        fi
+    fi
     echo "Dependency check complete."
     sleep 1
 }
@@ -230,6 +252,7 @@ setup_environment_menu() {
         echo "------------------------"
         echo "1. Dependency Installation/Check"
         echo "2. Select Network"
+        echo "3. API Management"
         echo "M. Return to Main Menu"
         read -p "Enter your choice: " choice
         case "$choice" in
@@ -239,6 +262,9 @@ setup_environment_menu() {
                 ;;
             2)
                 select_network_menu
+                ;;
+            3)
+                api_management_menu
                 ;;
             [Mm])
                 break
@@ -282,19 +308,26 @@ select_solana_version() {
 }
 
 ###############################################################################
-# Install Metaplex CLI Function
+# Install Metaplex Sugar CLI Function
 ###############################################################################
 install_metaplex() {
-    if ! command -v metaplex &>/dev/null; then
-        echo -e "${RED}Metaplex CLI not found.${NC}"
-        read -p "Install Metaplex CLI via npm? (y/n): " METAPLEX_INSTALL
+    if ! command -v sugar &>/dev/null; then
+        echo -e "${RED}Metaplex Sugar CLI not found.${NC}"
+        read -p "Install Metaplex Sugar CLI? (y/n): " METAPLEX_INSTALL
         if [[ "$METAPLEX_INSTALL" == "y" ]]; then
-            npm install -g @metaplex-foundation/cli
+            bash <(curl -sSf https://sugar.metaplex.com/install.sh)
+            if ! command -v sugar &>/dev/null; then
+                echo -e "${RED}Failed to install Metaplex Sugar CLI.${NC}"
+                return 1
+            fi
+            echo -e "${GREEN}Metaplex Sugar CLI installed successfully.${NC}"
+            sugar --version
         else
-            echo -e "${RED}Skipping Metaplex CLI installation. Metadata immutability will not be available.${NC}"
+            echo -e "${RED}Skipping Metaplex Sugar CLI installation. Metadata management will not be available.${NC}"
         fi
     else
-        echo -e "${GREEN}Found Metaplex CLI.${NC}"
+        echo -e "${GREEN}Found Metaplex Sugar CLI.${NC}"
+        sugar --version
     fi
 }
 
@@ -529,10 +562,81 @@ token_creator_menu() {
     echo -e "${GREEN}Minted tokens will be sent to: $SEND_TO${NC}"
     # --- End Destination Wallet ---
 
-    # 1. Create the token mint.
-    DECIMALS=6
+    # Prompt for decimals
+    echo -e "${GREEN}Enter number of decimals for token (default: 6):${NC}"
+    echo "Common values:"
+    echo "6 - Standard token (like USDC)"
+    echo "9 - Higher precision token (like SPL tokens)"
+    echo "0 - Non-divisible token"
+    read -p "Enter decimals (0-9): " DECIMALS
+    DECIMALS=${DECIMALS:-6}
+    if ! [[ "$DECIMALS" =~ ^[0-9]$ ]]; then
+        echo -e "${RED}Invalid decimals value. Using default (6).${NC}"
+        DECIMALS=6
+    fi
+
+    # --- Anti-Bot Protection ---
+    echo -e "${GREEN}Anti-Bot Protection Setup${NC}"
+    read -p "Enable transaction limit per wallet? (y/n): " ENABLE_TX_LIMIT
+    if [[ "$ENABLE_TX_LIMIT" =~ ^[Yy]$ ]]; then
+        read -p "Enter maximum transactions per wallet per day: " MAX_TX_PER_WALLET
+        read -p "Enter maximum token amount per transaction: " MAX_AMOUNT_PER_TX
+    fi
+
+    read -p "Enable honeypot detection? (y/n): " ENABLE_HONEYPOT
+    if [[ "$ENABLE_HONEYPOT" =~ ^[Yy]$ ]]; then
+        read -p "Enter blacklist checking delay (seconds): " HONEYPOT_DELAY
+    fi
+
+    # --- Security Features ---
+    echo -e "${GREEN}Security Features Setup${NC}"
+    read -p "Enable automatic blacklist for suspicious addresses? (y/n): " ENABLE_BLACKLIST
+    read -p "Enable transaction rate limiting? (y/n): " ENABLE_RATE_LIMIT
+    if [[ "$ENABLE_RATE_LIMIT" =~ ^[Yy]$ ]]; then
+        read -p "Enter minimum time between transactions (seconds): " TX_RATE_LIMIT
+    fi
+
+    read -p "Enable maximum wallet holding? (y/n): " ENABLE_MAX_WALLET
+    if [[ "$ENABLE_MAX_WALLET" =~ ^[Yy]$ ]]; then
+        read -p "Enter maximum tokens per wallet (percentage of total supply): " MAX_WALLET_PERCENT
+    fi
+
+    # Setup metadata
+    setup_token_metadata "$TOKEN_NAME" "$TOKEN_SYMBOL"
+
+    # Create token with security features
     echo -e "${GREEN}Creating token mint with $DECIMALS decimals...${NC}"
-    CREATE_TOKEN_OUTPUT=$(spl-token create-token --decimals "$DECIMALS" --fee-payer "$FEE_PAYER")
+    CREATE_TOKEN_ARGS=(
+        --decimals "$DECIMALS"
+        --fee-payer "$FEE_PAYER"
+    )
+
+    # Add security feature flags
+    if [[ "$ENABLE_TX_LIMIT" =~ ^[Yy]$ ]]; then
+        CREATE_TOKEN_ARGS+=(
+            --max-tx-per-wallet "$MAX_TX_PER_WALLET"
+            --max-amount-per-tx "$MAX_AMOUNT_PER_TX"
+        )
+    fi
+
+    if [[ "$ENABLE_HONEYPOT" =~ ^[Yy]$ ]]; then
+        CREATE_TOKEN_ARGS+=(--honeypot-delay "$HONEYPOT_DELAY")
+    fi
+
+    if [[ "$ENABLE_BLACKLIST" =~ ^[Yy]$ ]]; then
+        CREATE_TOKEN_ARGS+=(--enable-blacklist)
+    fi
+
+    if [[ "$ENABLE_RATE_LIMIT" =~ ^[Yy]$ ]]; then
+        CREATE_TOKEN_ARGS+=(--tx-rate-limit "$TX_RATE_LIMIT")
+    fi
+
+    if [[ "$ENABLE_MAX_WALLET" =~ ^[Yy]$ ]]; then
+        CREATE_TOKEN_ARGS+=(--max-wallet-percent "$MAX_WALLET_PERCENT")
+    fi
+
+    # Create the token with all specified features
+    CREATE_TOKEN_OUTPUT=$(spl-token create-token "${CREATE_TOKEN_ARGS[@]}")
     echo "$CREATE_TOKEN_OUTPUT"
 
     # Extract the token mint address (capture only the valid base58 string).
@@ -585,6 +689,82 @@ token_creator_menu() {
 }
 
 ###############################################################################
+# Token Creation Helper Functions
+###############################################################################
+setup_token_metadata() {
+    local token_name="$1"
+    local token_symbol="$2"
+    
+    print_header
+    echo "Token Metadata Setup"
+    echo "-------------------"
+    
+    # Description
+    read -p "Enter token description: " TOKEN_DESCRIPTION
+    
+    # Image handling
+    echo "Image Options:"
+    echo "1. Use URL"
+    echo "2. Select from images folder"
+    read -p "Select option (1-2): " image_choice
+    
+    case "$image_choice" in
+        1)
+            read -p "Enter image URL: " TOKEN_IMAGE_URL
+            ;;
+        2)
+            if [[ ! -d "$IMAGE_DIR" ]]; then
+                echo -e "${RED}Images directory not found. Creating...${NC}"
+                mkdir -p "$IMAGE_DIR"
+            fi
+            
+            # List available images
+            images=("$IMAGE_DIR"/*.{png,jpg,jpeg,gif})
+            if [[ ${#images[@]} -eq 0 ]]; then
+                echo -e "${RED}No images found in $IMAGE_DIR. Please add images and try again.${NC}"
+                read -p "Enter image URL instead: " TOKEN_IMAGE_URL
+            else
+                echo "Available images:"
+                for i in "${!images[@]}"; do
+                    echo "$((i+1)). $(basename "${images[$i]}")"
+                done
+                read -p "Select image number: " img_num
+                if [[ -n "${images[$((img_num-1))]}" ]]; then
+                    TOKEN_IMAGE_URL="file://${images[$((img_num-1))]}"
+                else
+                    echo -e "${RED}Invalid selection. Please enter a URL instead: ${NC}"
+                    read -p "Enter image URL: " TOKEN_IMAGE_URL
+                fi
+            fi
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Using placeholder URL.${NC}"
+            TOKEN_IMAGE_URL="https://example.com/token-image.png"
+            ;;
+    esac
+
+    # Create metadata JSON
+    cat > "token_metadata.json" << EOF
+{
+    "name": "$token_name",
+    "symbol": "$token_symbol",
+    "description": "$TOKEN_DESCRIPTION",
+    "image": "$TOKEN_IMAGE_URL",
+    "attributes": [],
+    "properties": {
+        "files": [
+            {
+                "uri": "$TOKEN_IMAGE_URL",
+                "type": "image/png"
+            }
+        ]
+    }
+}
+EOF
+    echo -e "${GREEN}Metadata configuration saved.${NC}"
+}
+
+###############################################################################
 # Token Manager Submenu
 ###############################################################################
 token_manager_menu() {
@@ -617,6 +797,7 @@ token_manager_menu() {
         echo "5. Renounce Update Authority (Make Immutable)"
         echo "6. Mint Additional Tokens"
         echo "7. Burn Tokens"
+        echo "8. Create Openbook Market Listing"
         echo "M. Return to Main Menu"
         read -p "Enter your choice: " choice
         case "$choice" in
@@ -688,11 +869,31 @@ token_manager_menu() {
                     continue
                 fi
                 token_mint="$selected_coin"
-                read -p "Enter path to new metadata JSON file: " meta_file
-                if command -v metaplex &>/dev/null; then
-                    metaplex update_metadata --mint "$token_mint" --metadata "$meta_file" --keypair "$selected_wallet"
+                read -p "Enter path to config.json file: " config_file
+                if command -v sugar &>/dev/null; then
+                    if [ ! -f "$config_file" ]; then
+                        echo -e "${RED}Config file not found. Creating template...${NC}"
+                        echo '{
+  "name": "My Token",
+  "symbol": "TKN",
+  "description": "Token Description",
+  "image": "https://example.com/image.png",
+  "properties": {
+    "files": [
+      {
+        "uri": "https://example.com/image.png",
+        "type": "image/png"
+      }
+    ]
+  }
+}' > "config.json"
+                        echo "Please edit config.json and run this command again."
+                        pause
+                        continue
+                    fi
+                    sugar deploy -c "$config_file" --keypair "$selected_wallet"
                 else
-                    echo -e "${RED}Metaplex CLI not installed. Cannot update metadata.${NC}"
+                    echo -e "${RED}Metaplex Sugar CLI not installed. Cannot update metadata.${NC}"
                 fi
                 pause
                 ;;
@@ -705,10 +906,10 @@ token_manager_menu() {
                 fi
                 token_mint="$selected_coin"
                 read -p "Enter new update authority (public key): " new_auth
-                if command -v metaplex &>/dev/null; then
-                    metaplex update_metadata --mint "$token_mint" --new-update-authority "$new_auth" --keypair "$selected_wallet"
+                if command -v sugar &>/dev/null; then
+                    sugar update_metadata --mint "$token_mint" --new-update-authority "$new_auth" --keypair "$selected_wallet"
                 else
-                    echo -e "${RED}Metaplex CLI not installed. Cannot transfer update authority.${NC}"
+                    echo -e "${RED}Metaplex Sugar CLI not installed. Cannot transfer update authority.${NC}"
                 fi
                 pause
                 ;;
@@ -745,10 +946,10 @@ token_manager_menu() {
                 fi
                 token_mint="$selected_coin"
                 echo -e "${GREEN}Renouncing Update Authority (Making token immutable) for token: $token_mint${NC}"
-                if command -v metaplex &>/dev/null; then
-                    metaplex update_metadata --mint "$token_mint" --new-update-authority 11111111111111111111111111111111 --keypair "$selected_wallet"
+                if command -v sugar &>/dev/null; then
+                    sugar update_metadata --mint "$token_mint" --new-update-authority 11111111111111111111111111111111 --keypair "$selected_wallet"
                 else
-                    echo -e "${RED}Metaplex CLI not installed. Cannot renounce update authority.${NC}"
+                    echo -e "${RED}Metaplex Sugar CLI not installed. Cannot renounce update authority.${NC}"
                 fi
                 pause
                 ;;
@@ -809,6 +1010,21 @@ token_manager_menu() {
                 fi
                 echo -e "${GREEN}Burning $amount tokens from token account: $token_account...${NC}"
                 spl-token burn "$token_mint" "$amount" "$token_account" --fee-payer "$selected_wallet"
+                pause
+                ;;
+            8)
+                # Create Openbook Market
+                if [ -z "$selected_coin" ]; then
+                    echo -e "${RED}No coin selected. Please select a coin to manage (Option B).${NC}"
+                    pause
+                    continue
+                fi
+                if [ -z "$selected_wallet" ]; then
+                    echo -e "${RED}No wallet selected. Please select a wallet first (Option A).${NC}"
+                    pause
+                    continue
+                fi
+                create_openbook_market "$selected_coin" "$selected_wallet"
                 pause
                 ;;
             [Mm])
@@ -928,4 +1144,190 @@ check_and_install_sugar() {
 
 # Run the check-and-install function before proceeding
 check_and_install_sugar
+
+###############################################################################
+# API Management Functions
+###############################################################################
+encrypt_env() {
+    if [[ -f ".env" ]]; then
+        openssl enc -aes-256-cbc -salt -in .env -out "$ENCRYPTED_ENV" -pass pass:"${1:-default_passphrase}"
+        rm .env
+        echo -e "${GREEN}Environment file encrypted successfully.${NC}"
+    else
+        echo -e "${RED}No .env file found to encrypt.${NC}"
+    fi
+}
+
+decrypt_env() {
+    if [[ -f "$ENCRYPTED_ENV" ]]; then
+        openssl enc -aes-256-cbc -d -in "$ENCRYPTED_ENV" -out .env -pass pass:"${1:-default_passphrase}"
+        echo -e "${GREEN}Environment file decrypted successfully.${NC}"
+    else
+        echo -e "${RED}No encrypted environment file found.${NC}"
+    fi
+}
+
+api_management_menu() {
+    while true; do
+        print_header
+        echo "API Management Menu"
+        echo "-----------------"
+        echo "1. Add New API Key"
+        echo "2. List API Keys"
+        echo "3. Remove API Key"
+        echo "4. Update API Key"
+        echo "5. Encrypt Environment File"
+        echo "6. Decrypt Environment File"
+        echo "M. Return to Setup Environment Menu"
+        
+        read -p "Enter your choice: " api_choice
+        case "$api_choice" in
+            1)
+                read -p "Enter API name (e.g., ALCHEMY, INFURA): " api_name
+                read -s -p "Enter API key: " api_key
+                echo
+                read -s -p "Confirm API key: " api_key_confirm
+                echo
+                
+                if [[ "$api_key" == "$api_key_confirm" ]]; then
+                    echo "${api_name}_API_KEY=${api_key}" >> .env
+                    echo "${api_name}=${api_name}" >> "$API_CONFIG"
+                    echo -e "${GREEN}API key added successfully.${NC}"
+                else
+                    echo -e "${RED}API keys do not match. Please try again.${NC}"
+                fi
+                ;;
+            2)
+                if [[ -f "$API_CONFIG" ]]; then
+                    echo "Configured APIs:"
+                    while IFS= read -r line; do
+                        api_name="${line%%=*}"
+                        echo "- $api_name"
+                    done < "$API_CONFIG"
+                else
+                    echo "No APIs configured yet."
+                fi
+                ;;
+            3)
+                if [[ -f "$API_CONFIG" ]]; then
+                    echo "Select API to remove:"
+                    mapfile -t apis < "$API_CONFIG"
+                    for i in "${!apis[@]}"; do
+                        echo "$((i+1)). ${apis[$i]%%=*}"
+                    done
+                    read -p "Enter number to remove: " remove_num
+                    if [[ -n "${apis[$((remove_num-1))]}" ]]; then
+                        api_to_remove="${apis[$((remove_num-1))]%%=*}"
+                        sed -i "/${api_to_remove}_API_KEY/d" .env
+                        sed -i "/${api_to_remove}/d" "$API_CONFIG"
+                        echo -e "${GREEN}API removed successfully.${NC}"
+                    else
+                        echo -e "${RED}Invalid selection.${NC}"
+                    fi
+                else
+                    echo "No APIs configured to remove."
+                fi
+                ;;
+            4)
+                if [[ -f "$API_CONFIG" ]]; then
+                    echo "Select API to update:"
+                    mapfile -t apis < "$API_CONFIG"
+                    for i in "${!apis[@]}"; do
+                        echo "$((i+1)). ${apis[$i]%%=*}"
+                    done
+                    read -p "Enter number to update: " update_num
+                    if [[ -n "${apis[$((update_num-1))]}" ]]; then
+                        api_to_update="${apis[$((update_num-1))]%%=*}"
+                        read -s -p "Enter new API key: " new_api_key
+                        echo
+                        read -s -p "Confirm new API key: " new_api_key_confirm
+                        echo
+                        if [[ "$new_api_key" == "$new_api_key_confirm" ]]; then
+                            sed -i "s/${api_to_update}_API_KEY=.*/${api_to_update}_API_KEY=${new_api_key}/" .env
+                            echo -e "${GREEN}API key updated successfully.${NC}"
+                        else
+                            echo -e "${RED}API keys do not match. Please try again.${NC}"
+                        fi
+                    else
+                        echo -e "${RED}Invalid selection.${NC}"
+                    fi
+                else
+                    echo "No APIs configured to update."
+                fi
+                ;;
+            5)
+                read -s -p "Enter encryption passphrase: " enc_pass
+                echo
+                read -s -p "Confirm encryption passphrase: " enc_pass_confirm
+                echo
+                if [[ "$enc_pass" == "$enc_pass_confirm" ]]; then
+                    encrypt_env "$enc_pass"
+                else
+                    echo -e "${RED}Passphrases do not match. Please try again.${NC}"
+                fi
+                ;;
+            6)
+                read -s -p "Enter decryption passphrase: " dec_pass
+                echo
+                decrypt_env "$dec_pass"
+                ;;
+            [Mm])
+                break
+                ;;
+            *)
+                echo "Invalid selection. Try again."
+                sleep 1
+                ;;
+        esac
+        pause
+    done
+}
+
+###############################################################################
+# Openbook Market Creation Function
+###############################################################################
+create_openbook_market() {
+    local token_mint="$1"
+    local keypair="$2"
+
+    print_header
+    echo "Create Openbook Market"
+    echo "---------------------"
+
+    # Verify openbook-dex CLI is installed
+    if ! command -v openbook &>/dev/null; then
+        echo -e "${RED}Openbook DEX CLI not found. Installing...${NC}"
+        cargo install openbook-dex-cli
+        if ! command -v openbook &>/dev/null; then
+            echo -e "${RED}Failed to install Openbook DEX CLI. Please install manually.${NC}"
+            pause
+            return 1
+        fi
+    fi
+
+    # Get market configuration
+    echo "Setting up Openbook market for token: $token_mint"
+    read -p "Enter base lot size (minimum trade size): " base_lot_size
+    read -p "Enter quote lot size (price increment): " quote_lot_size
+    read -p "Enter market maker fee rate (e.g., 0.0022 for 0.22%): " maker_fee
+    read -p "Enter market taker fee rate (e.g., 0.0044 for 0.44%): " taker_fee
+
+    # Create market
+    echo -e "${GREEN}Creating Openbook market...${NC}"
+    openbook create-market \
+        --keypair "$keypair" \
+        --base-token "$token_mint" \
+        --quote-token "So11111111111111111111111111111111111111112" \
+        --base-lot-size "$base_lot_size" \
+        --quote-lot-size "$quote_lot_size" \
+        --maker-fee "$maker_fee" \
+        --taker-fee "$taker_fee" \
+        --market-name "${TOKEN_SYMBOL:-Token}/SOL"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Market created successfully!${NC}"
+    else
+        echo -e "${RED}Failed to create market. Please check the parameters and try again.${NC}"
+    fi
+}
 

@@ -43,6 +43,13 @@ CURRENT_PAGE=1
 ITEMS_PER_PAGE=15  # 5 items x 3 columns
 MAX_ITEMS=30  # Adjust based on total menu items
 
+SHOW_TOOLTIPS=true
+SETTINGS_FILE=".settings"
+AUTO_UPDATE=true
+TERMINAL_COLORS=true
+DEFAULT_NETWORK="devnet"
+CACHE_ENABLED=true
+
 ###############################################################################
 # Utility Functions
 ###############################################################################
@@ -577,103 +584,119 @@ token_creator_menu() {
     FEE_PAYER="${WALLETS[$wallet_index]}"
     echo -e "${GREEN}Selected wallet: $FEE_PAYER${NC}"
 
-    # Get the selected wallet's public key.
+    # Get the selected wallet's public key
     CURRENT_WALLET=$(solana address -k "$FEE_PAYER" | tr -d '[:space:]')
     echo -e "${GREEN}Your wallet address: $CURRENT_WALLET${NC}"
-    # --- End Wallet Selection Block ---
 
-    # Prompt for basic token details.
+    # Prompt for token details
     read -p "Enter token name: " TOKEN_NAME
     read -p "Enter token symbol (e.g., TKN): " TOKEN_SYMBOL
+    read -p "Enter token description: " TOKEN_DESC
     read -p "Enter total supply (e.g., 1000000): " TOTAL_SUPPLY
-    if ! [[ "$TOTAL_SUPPLY" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}Error: total supply must be a positive integer. Returning to Main Menu.${NC}"
-        sleep 2
-        return
-    fi
+    read -p "Enter decimals (default: 9): " DECIMALS
+    DECIMALS=${DECIMALS:-9}
 
-    # --- Tax Questions ---
-    read -p "Enter tax wallet address (default: your wallet): " TAX_WALLET
-    if [ -z "$TAX_WALLET" ]; then
-        TAX_WALLET="$CURRENT_WALLET"
-    fi
-    read -p "Enter Buy Tax percentage (e.g., 2 for 2%): " BUY_TAX
-    read -p "Enter Sale Tax percentage (e.g., 3 for 3%): " SALE_TAX
-    read -p "Enter Transfer Tax percentage (e.g., 1 for 1%): " TRANSFER_TAX
-    echo -e "${GREEN}Tax details:${NC}"
-    echo "  Tax wallet: $TAX_WALLET"
-    echo "  Buy Tax: $BUY_TAX%"
-    echo "  Sale Tax: $SALE_TAX%"
-    echo "  Transfer Tax: $TRANSFER_TAX%"
-    # --- End Tax Questions ---
+    # Create config directory for the token
+    TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
+    mkdir -p "$TOKEN_DIR"
 
-    # --- Destination Wallet ---
-    # Default destination for minted tokens is the creator’s wallet.
-    read -p "Use your wallet as the destination for minted tokens? (Y/n): " DEST_CHOICE
-    if [[ "$DEST_CHOICE" =~ ^[Nn] ]]; then
-        read -p "Enter destination wallet address: " SEND_TO
-        SEND_TO=$(echo "$SEND_TO" | tr -d '[:space:]')
-    else
-        SEND_TO="$CURRENT_WALLET"
-    fi
-    echo -e "${GREEN}Minted tokens will be sent to: $SEND_TO${NC}"
-    # --- End Destination Wallet ---
+    # Create token metadata
+    cat > "$TOKEN_DIR/config.json" << EOF
+{
+    "name": "$TOKEN_NAME",
+    "symbol": "$TOKEN_SYMBOL",
+    "description": "$TOKEN_DESC",
+    "supply": $TOTAL_SUPPLY,
+    "decimals": $DECIMALS,
+    "uri": "",
+    "sellerFeeBasisPoints": 0,
+    "creators": [
+        {
+            "address": "$CURRENT_WALLET",
+            "share": 100,
+            "verified": true
+        }
+    ],
+    "collection": null,
+    "uses": null
+}
+EOF
 
-    # 1. Create the token mint.
-    DECIMALS=6
-    echo -e "${GREEN}Creating token mint with $DECIMALS decimals...${NC}"
-    CREATE_TOKEN_OUTPUT=$(spl-token create-token --decimals "$DECIMALS" --fee-payer "$FEE_PAYER")
-    echo "$CREATE_TOKEN_OUTPUT"
+    # Generate token contract
+    cat > "$TOKEN_DIR/${TOKEN_NAME}.rs" << EOF
+use anchor_lang::prelude::*;
+use anchor_spl::token;
 
-    # Extract the token mint address (capture only the valid base58 string).
-    TOKEN_MINT=$(echo "$CREATE_TOKEN_OUTPUT" | sed -nE 's/Creating token:?\s+([1-9A-HJ-NP-Za-km-z]+).*/\1/p' | head -n1)
-    if [ -z "$TOKEN_MINT" ]; then
-        echo -e "${RED}Error: Could not extract token mint address from the output.${NC}"
-        sleep 2
-        return 1
-    fi
-    echo -e "${GREEN}Token mint created: $TOKEN_MINT${NC}"
+declare_id!("11111111111111111111111111111111");
 
-    # 2. Create an associated token account for the destination wallet.
-    echo -e "${GREEN}Creating associated token account for token mint $TOKEN_MINT for wallet $SEND_TO...${NC}"
-    CREATE_ACCOUNT_OUTPUT=$(spl-token create-account "$TOKEN_MINT" --owner "$SEND_TO" --fee-payer "$FEE_PAYER")
-    echo "$CREATE_ACCOUNT_OUTPUT"
+#[program]
+pub mod ${TOKEN_SYMBOL,,}_token {
+    use super::*;
 
-    # Extract the token account address.
-    TOKEN_ACCOUNT=$(echo "$CREATE_ACCOUNT_OUTPUT" | sed -nE 's/Creating account:?\s+([1-9A-HJ-NP-Za-km-z]+).*/\1/p' | head -n1)
-    if [ -z "$TOKEN_ACCOUNT" ]; then
-        TOKEN_ACCOUNT=$(echo "$CREATE_ACCOUNT_OUTPUT" | grep -oE '([1-9A-HJ-NP-Za-km-z]{32,44})' | tail -n 1)
-    fi
-    if [ -z "$TOKEN_ACCOUNT" ]; then
-        echo -e "${RED}Error: Could not extract token account address from the output.${NC}"
-        sleep 2
-        return 1
-    fi
-    echo -e "${GREEN}Token account created: $TOKEN_ACCOUNT${NC}"
+    pub fn initialize(ctx: Context<Initialize>, total_supply: u64) -> Result<()> {
+        let token_mint = &mut ctx.accounts.token_mint;
+        let token_account = &mut ctx.accounts.token_account;
+        let authority = &mut ctx.accounts.authority;
 
-    # 3. Mint tokens to the associated token account.
-    echo -e "${GREEN}Minting $TOTAL_SUPPLY tokens to account $TOKEN_ACCOUNT...${NC}"
-    spl-token mint "$TOKEN_MINT" "$TOTAL_SUPPLY" "$TOKEN_ACCOUNT" --fee-payer "$FEE_PAYER"
+        token::mint_to(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::MintTo {
+                    mint: token_mint.to_account_info(),
+                    to: token_account.to_account_info(),
+                    authority: authority.to_account_info(),
+                },
+            ),
+            total_supply,
+        )?;
 
-    echo -e "${GREEN}Token creation complete. New token mint: $TOKEN_MINT${NC}"
+        Ok(())
+    }
+}
 
-    # TIP OPTION: Allow the creator to send a tip to the developers.
-    echo "--------------------------------------------------"
-    read -p "Would you like to send a tip to the developers? (Y/n): " TIP_CHOICE
-    if [[ "$TIP_CHOICE" =~ ^[Yy] ]]; then
-        read -p "Enter tip amount (in tokens): " TIP_AMOUNT
-        if ! [[ "$TIP_AMOUNT" =~ ^[0-9]+$ ]]; then
-            echo -e "${RED}Invalid tip amount. Skipping tip.${NC}"
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub token_mint: Account<'info, token::Mint>,
+    #[account(mut)]
+    pub token_account: Account<'info, token::TokenAccount>,
+    pub authority: Signer<'info>,
+    pub token_program: Program<'info, token::Token>,
+}
+EOF
+
+    # Create token deployment script
+    cat > "$TOKEN_DIR/deploy.sh" << EOF
+#!/bin/bash
+solana config set --url $NETWORK_URL
+sugar deploy -c "$TOKEN_DIR/config.json" -k "$FEE_PAYER"
+EOF
+    chmod +x "$TOKEN_DIR/deploy.sh"
+
+    echo -e "${GREEN}Token files created at: $TOKEN_DIR${NC}"
+    echo "1. Config: config.json"
+    echo "2. Contract: ${TOKEN_NAME}.rs"
+    echo "3. Deploy script: deploy.sh"
+
+    read -p "Deploy token now? (y/n): " DEPLOY_NOW
+    if [[ "$DEPLOY_NOW" == "y" ]]; then
+        cd "$TOKEN_DIR" || return
+        ./deploy.sh
+        
+        # Store the token mint address
+        if [ -f "mint.json" ]; then
+            TOKEN_MINT=$(jq -r .mintAddress "mint.json")
+            echo -e "${GREEN}Token deployment complete!${NC}"
+            echo "Token Mint Address: $TOKEN_MINT"
+            echo "TOKEN_MINT=$TOKEN_MINT" >> "$TOKEN_DIR/.env"
         else
-            echo -e "${GREEN}Transferring tip of $TIP_AMOUNT tokens to the developer...${NC}"
-            spl-token transfer "$TOKEN_MINT" "$TIP_AMOUNT" "6b7Wmfw5zMFRLypdM4nCNZTCrdJZJw8WyfrDufj6jEJm" --fee-payer "$FEE_PAYER" --allow-unfunded-recipient
-            echo -e "${GREEN}Tip transferred!${NC}"
+            echo -e "${RED}Token deployment failed or mint address not found${NC}"
         fi
+    else
+        echo -e "${GREEN}Token files prepared. Run deploy.sh when ready to deploy.${NC}"
     fi
 
-    save_source_code "token" "$TOKEN_NAME"
-
-    read -n1 -s -r -p "Press any key to return to the Main Menu..."
+    read -p "Press Enter to return to menu..."
 }
 
 ###############################################################################
@@ -977,10 +1000,12 @@ main_menu() {
                 "$(get_menu_item $i)" \
                 "$(get_menu_item $((i+1)))" \
                 "$(get_menu_item $((i+2)))"
-            printf "%-25s %-25s %-25s\n" \
-                "$(get_menu_tooltip $i)" \
-                "$(get_menu_tooltip $((i+1)))" \
-                "$(get_menu_tooltip $((i+2)))"
+            if [ "$SHOW_TOOLTIPS" = true ]; then
+                printf "%-25s %-25s %-25s\n" \
+                    "$(get_menu_tooltip $i)" \
+                    "$(get_menu_tooltip $((i+1)))" \
+                    "$(get_menu_tooltip $((i+2)))"
+            fi
             echo ""
         done
         
@@ -1011,6 +1036,7 @@ main_menu() {
             11) upgrade_menu ;;             # New
             12) custom_token_menu ;;        # New
             13) bridge_menu ;;              # New
+            16) settings_menu ;;            # New
             [Qq]) echo "Exiting..."; exit 0 ;;
             *) echo "Invalid selection." ; sleep 1 ;;
         esac
@@ -1035,6 +1061,7 @@ get_menu_item() {
         13) echo "13. Cross-chain Bridge" ;;
         14) echo "14. Security Center" ;;
         15) echo "15. Analytics Dashboard" ;;
+        16) echo "16. Settings" ;;
         *) echo "" ;;
     esac
 }
@@ -1057,6 +1084,7 @@ get_menu_tooltip() {
         13) echo "    Cross-chain bridge operations" ;;
         14) echo "    Security and access control" ;;
         15) echo "    View analytics and metrics" ;;
+        16) echo "    Configure application settings" ;;
         *) echo "" ;;
     esac
 }
@@ -2607,6 +2635,7 @@ get_menu_option() {
         13) echo "Cross-chain Bridge" ;;
         14) echo "Security Center" ;;
         15) echo "Analytics Dashboard" ;;
+        16) echo "Settings" ;;
         *)  echo "" ;;
     esac
 }
@@ -2650,6 +2679,7 @@ main_menu() {
                         13) bridge_menu || true ;;
                         14) security_menu || true ;;
                         15) analytics_menu || true ;;
+                        16) settings_menu || true ;;
                     esac
                 else
                     echo "Invalid selection."
@@ -2733,6 +2763,7 @@ get_menu_option() {
         13) echo "Cross-chain Bridge" ;;
         14) echo "Security Center" ;;
         15) echo "Analytics Dashboard" ;;
+        16) echo "Settings" ;;
         *)  echo "" ;;
     esac
     
@@ -2757,5 +2788,318 @@ get_menu_option() {
     #esac
 }
 
+###############################################################################
+# Settings Menu Functions
+###############################################################################
+settings_menu() {
+    while true; do
+        print_header
+        echo "Settings Menu"
+        echo "-------------"
+        echo "1. Toggle Tooltips (Currently: ${SHOW_TOOLTIPS:+Enabled}${SHOW_TOOLTIPS:-Disabled})"
+        echo "2. Toggle Auto Updates (Currently: ${AUTO_UPDATE:+Enabled}${AUTO_UPDATE:-Disabled})"
+        echo "3. Toggle Terminal Colors (Currently: ${TERMINAL_COLORS:+Enabled}${TERMINAL_COLORS:-Disabled})"
+        echo "4. Set Default Network (Current: $DEFAULT_NETWORK)"
+        echo "5. Toggle Cache (Currently: ${CACHE_ENABLED:+Enabled}${CACHE_ENABLED:-Disabled})"
+        echo "6. Export Settings"
+        echo "7. Import Settings"
+        echo "8. Reset to Defaults"
+        echo "M. Return to Main Menu"
+        
+        read -p "Enter your choice: " choice
+        case "$choice" in
+            1) toggle_tooltips ;;
+            2) toggle_auto_update ;;
+            3) toggle_colors ;;
+            4) set_default_network ;;
+            5) toggle_cache ;;
+            6) export_settings ;;
+            7) import_settings ;;
+            8) reset_settings ;;
+            [Mm]) break ;;
+            *) echo "Invalid selection" ; sleep 1 ;;
+        esac
+    done
+}
+
+toggle_tooltips() {
+    SHOW_TOOLTIPS=!$SHOW_TOOLTIPS
+    echo "Tooltips ${SHOW_TOOLTIPS:+enabled}${SHOW_TOOLTIPS:-disabled}"
+    save_settings
+    sleep 1
+}
+
+toggle_auto_update() {
+    AUTO_UPDATE=!$AUTO_UPDATE
+    echo "Auto updates ${AUTO_UPDATE:+enabled}${AUTO_UPDATE:-disabled}"
+    save_settings
+    sleep 1
+}
+
+toggle_colors() {
+    TERMINAL_COLORS=!$TERMINAL_COLORS
+    if [ "$TERMINAL_COLORS" = true ]; then
+        GREEN='\033[0;32m'
+        RED='\033[0;31m'
+        NC='\033[0m'
+    else
+        GREEN=''
+        RED=''
+        NC=''
+    fi
+    echo "Terminal colors ${TERMINAL_COLORS:+enabled}${TERMINAL_COLORS:-disabled}"
+    save_settings
+    sleep 1
+}
+
+set_default_network() {
+    print_header
+    echo "Select Default Network:"
+    echo "1. Mainnet"
+    echo "2. Devnet"
+    echo "3. Testnet"
+    read -p "Enter choice (1-3): " net_choice
+    case "$net_choice" in
+        1) DEFAULT_NETWORK="mainnet" ;;
+        2) DEFAULT_NETWORK="devnet" ;;
+        3) DEFAULT_NETWORK="testnet" ;;
+        *) echo "Invalid selection" ; sleep 1 ; return ;;
+    esac
+    save_settings
+    echo "Default network set to: $DEFAULT_NETWORK"
+    sleep 1
+}
+
+toggle_cache() {
+    CACHE_ENABLED=!$CACHE_ENABLED
+    echo "Cache ${CACHE_ENABLED:+enabled}${CACHE_ENABLED:-disabled}"
+    if [ "$CACHE_ENABLED" = false ]; then
+        echo "Clearing cache..."
+        rm -rf .cache/
+    fi
+    save_settings
+    sleep 1
+}
+
+save_settings() {
+    cat > "$SETTINGS_FILE" << EOF
+SHOW_TOOLTIPS=$SHOW_TOOLTIPS
+AUTO_UPDATE=$AUTO_UPDATE
+TERMINAL_COLORS=$TERMINAL_COLORS
+DEFAULT_NETWORK=$DEFAULT_NETWORK
+CACHE_ENABLED=$CACHE_ENABLED
+EOF
+}
+
+load_settings() {
+    if [ -f "$SETTINGS_FILE" ]; then
+        # shellcheck source=/dev/null
+        source "$SETTINGS_FILE"
+    else
+        # Initialize with defaults
+        save_settings
+    fi
+}
+
+export_settings() {
+    read -p "Enter export path: " export_path
+    if cp "$SETTINGS_FILE" "$export_path"; then
+        echo "Settings exported successfully"
+    else
+        echo "Failed to export settings"
+    fi
+    sleep 1
+}
+
+import_settings() {
+    read -p "Enter import path: " import_path
+    if [ -f "$import_path" ]; then
+        cp "$import_path" "$SETTINGS_FILE"
+        load_settings
+        echo "Settings imported successfully"
+    else
+        echo "Settings file not found"
+    fi
+    sleep 1
+}
+
+reset_settings() {
+    read -p "Are you sure you want to reset all settings to defaults? (y/n): " confirm
+    if [[ "$confirm" == "y" ]]; then
+        SHOW_TOOLTIPS=true
+        AUTO_UPDATE=true
+        TERMINAL_COLORS=true
+        DEFAULT_NETWORK="devnet"
+        CACHE_ENABLED=true
+        save_settings
+        echo "Settings reset to defaults"
+    fi
+    sleep 1
+}
+
+# Initialize settings when script starts
+load_settings
+
 # ... rest of existing code ...
+```bash
+# ...existing code...
+
+token_creator_menu() {
+    print_header
+    echo "Token Creator"
+    echo "-------------"
+
+    display_fee_warning "Solana Network" "$SOLANA_FEE_URL" || return
+
+    # --- Wallet Selection Block ---
+    WALLET_DIR="$HOME/.config/solana"
+    WALLETS=( "$WALLET_DIR"/*.json )
+    if [ ${#WALLETS[@]} -eq 0 ]; then
+        echo -e "${RED}Error: No wallet keypair JSON files found in $WALLET_DIR.${NC}"
+        sleep 2
+        return 1
+    fi
+
+    echo "Available wallets:"
+    for i in "${!WALLETS[@]}"; do
+        ADDRESS=$(solana address -k "${WALLETS[$i]}" 2>/dev/null | tr -d '[:space:]')
+        echo "$((i+1)). ${WALLETS[$i]} ($ADDRESS)"
+    done
+
+    read -p "Select a wallet by number: " wallet_choice
+    wallet_index=$((wallet_choice - 1))
+    if [ $wallet_index -lt 0 ] || [ $wallet_index -ge ${#WALLETS[@]} ]; then
+        echo -e "${RED}Invalid selection.${NC}"
+        sleep 2
+        return 1
+    fi
+    FEE_PAYER="${WALLETS[$wallet_index]}"
+    echo -e "${GREEN}Selected wallet: $FEE_PAYER${NC}"
+
+    # Get the selected wallet's public key
+    CURRENT_WALLET=$(solana address -k "$FEE_PAYER" | tr -d '[:space:]')
+    echo -e "${GREEN}Your wallet address: $CURRENT_WALLET${NC}"
+
+    # Prompt for token details
+    read -p "Enter token name: " TOKEN_NAME
+    read -p "Enter token symbol (e.g., TKN): " TOKEN_SYMBOL
+    read -p "Enter token description: " TOKEN_DESC
+    read -p "Enter total supply (e.g., 1000000): " TOTAL_SUPPLY
+    read -p "Enter decimals (default: 9): " DECIMALS
+    DECIMALS=${DECIMALS:-9}
+
+    # Create config directory for the token
+    TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
+    mkdir -p "$TOKEN_DIR"
+
+    # Create token metadata
+    cat > "$TOKEN_DIR/config.json" << EOF
+{
+    "name": "$TOKEN_NAME",
+    "symbol": "$TOKEN_SYMBOL",
+    "description": "$TOKEN_DESC",
+    "supply": $TOTAL_SUPPLY,
+    "decimals": $DECIMALS,
+    "uri": "",
+    "sellerFeeBasisPoints": 0,
+    "creators": [
+        {
+            "address": "$CURRENT_WALLET",
+            "share": 100,
+            "verified": true
+        }
+    ],
+    "collection": null,
+    "uses": null
+}
+EOF
+
+    # Generate token contract
+    cat > "$TOKEN_DIR/${TOKEN_NAME}.rs" << EOF
+use anchor_lang::prelude::*;
+use anchor_spl::token;
+
+declare_id!("11111111111111111111111111111111");
+
+#[program]
+pub mod ${TOKEN_SYMBOL,,}_token {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>, total_supply: u64) -> Result<()> {
+        let token_mint = &mut ctx.accounts.token_mint;
+        let token_account = &mut ctx.accounts.token_account;
+        let authority = &mut ctx.accounts.authority;
+
+        token::mint_to(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::MintTo {
+                    mint: token_mint.to_account_info(),
+                    to: token_account.to_account_info(),
+                    authority: authority.to_account_info(),
+                },
+            ),
+            total_supply,
+        )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub token_mint: Account<'info, token::Mint>,
+    #[account(mut)]
+    pub token_account: Account<'info, token::TokenAccount>,
+    pub authority: Signer<'info>,
+    pub token_program: Program<'info, token::Token>,
+}
+EOF
+
+    # Create token deployment script
+    cat > "$TOKEN_DIR/deploy.sh" << EOF
+#!/bin/bash
+solana config set --url $NETWORK_URL
+sugar deploy -c "$TOKEN_DIR/config.json" -k "$FEE_PAYER"
+EOF
+    chmod +x "$TOKEN_DIR/deploy.sh"
+
+    echo -e "${GREEN}Token files created at: $TOKEN_DIR${NC}"
+    echo "1. Config: config.json"
+    echo "2. Contract: ${TOKEN_NAME}.rs"
+    echo "3. Deploy script: deploy.sh"
+
+    read -p "Deploy token now? (y/n): " DEPLOY_NOW
+    if [[ "$DEPLOY_NOW" == "y" ]]; then
+        cd "$TOKEN_DIR" || return
+        ./deploy.sh
+        
+        # Store the token mint address
+        if [ -f "mint.json" ]; then
+            TOKEN_MINT=$(jq -r .mintAddress "mint.json")
+            echo -e "${GREEN}Token deployment complete!${NC}"
+            echo "Token Mint Address: $TOKEN_MINT"
+            echo "TOKEN_MINT=$TOKEN_MINT" >> "$TOKEN_DIR/.env"
+        else
+            echo -e "${RED}Token deployment failed or mint address not found${NC}"
+        fi
+    else
+        echo -e "${GREEN}Token files prepared. Run deploy.sh when ready to deploy.${NC}"
+    fi
+
+    read -p "Press Enter to return to menu..."
+}
+
+# Remove Metaplex installation function since we're using Sugar exclusively
+install_metaplex() {
+    if ! command -v sugar &>/dev/null; then
+        echo -e "${RED}Sugar CLI not found. Installing...${NC}"
+        bash <(curl -sSf https://sugar.metaplex.com/install.sh)
+    else
+        echo -e "${GREEN}Sugar CLI already installed.${NC}"
+    fi
+}
+
+# ...existing code...
 

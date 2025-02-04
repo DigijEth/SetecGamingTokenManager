@@ -58,10 +58,10 @@ The **Setec All In One Token Manager** is a **powerful, multi-functional blockch
 
 ### **Install the CLI Version**
 ```bash
-git clone https://github.com/your-repo/setec-token-manager.git
-cd setec-token-manager
-chmod +x framework_beta_v2_cloud_service.sh
-./framework_beta_v2_cloud_service.sh
+git clone https://github.com/DigijEth/SetecGamingTokenManager.git
+cd SetecGamingTokenManager
+chmod +x framework_betav2.sh
+./framework_betav2.sh
 ```
 
 ---
@@ -74,10 +74,10 @@ chmod +x framework_beta_v2_cloud_service.sh
 
 ### **Install & Deploy the Cloud Version**
 ```bash
-git clone https://github.com/your-repo/setec-token-manager.git
-cd setec-token-manager
-chmod +x framework_beta_v2_cloud_service.sh
-./framework_beta_v2_cloud_service.sh
+git clone https://github.com/DigijEth/SetecGamingTokenManager.git
+cd SetecGamingToken
+chmod +x framework_beta_cloud_service.sh
+./framework_beta_cloud_service.sh
 ```
 - Enter your **domain/subdomain** (e.g., `setec.yourdomain.com`)  
 - Follow the prompts to **configure MySQL and SSL certificates**  

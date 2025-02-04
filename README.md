@@ -1,3 +1,5 @@
+Note: Make sure PIP is installed.
+
 ### **Setec All In One Token Manager**  
 #### **A Comprehensive Blockchain & Token Management System**
 ---

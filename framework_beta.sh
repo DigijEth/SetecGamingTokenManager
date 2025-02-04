@@ -1,4 +1,30 @@
+#!/bin/bash
+
 # Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to check dependency
+check_dependency() {
+    local name=$1
+    local cmd=$2
+    local type=$3
+
+    printf "${YELLOW}Checking %-20s${NC}" "$name..."
+    if $cmd &> /dev/null; then
+        echo -e "${GREEN}✓${NC}"
+        return 0
+    else
+        echo -e "${RED}✗${NC}"
+        MISSING_DEPS+=("$name ($type)")
+        return 1
+    fi
+}
+
+# Initialize missing dependencies array
+declare -a MISSING_DEPS=()# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

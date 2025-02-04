@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# setec-solana-token-manager.sh
+# framework.sh
 #
-# Setec Gaming Labs Presents: Setec Solana Token Manager
+# Setec Gaming Labs Presents: Setec Solana Token Manager version 0.4.1
 #
 # DISCLAIMER:
 #   Setec Gaming Labs is not responsible for any financial or other losses.

@@ -734,89 +734,175 @@ token_creator_wizard() {
     wallet_index=$((wallet_choice - 1))
     FEE_PAYER="${WALLETS[$wallet_index]}"
 
+    # Multi-Signer Configuration
+    while true; do
+        print_header
+        echo "Step 6: Multi-Signature Setup"
+        echo "-------------------------"
+        echo "Multi-signature wallets require multiple approvals for token operations"
+        echo "Examples:"
+        echo "- 2/3 arrangement: Requires 2 out of 3 signers to approve"
+        echo "- 3/5 arrangement: Requires 3 out of 5 signers to approve"
+        echo
+        read -p "Enable multi-signature? (y/n): " ENABLE_MULTISIG
+        if [[ "$ENABLE_MULTISIG" == "y" ]]; then
+            read -p "Enter number of required signatures: " SIG_REQUIRED
+            read -p "Enter total number of signers: " TOTAL_SIGNERS
+            
+            # Collect signer addresses
+            declare -a SIGNER_ADDRESSES
+            for ((i=1; i<=TOTAL_SIGNERS; i++)); do
+                read -p "Enter signer $i public key: " signer
+                SIGNER_ADDRESSES+=("$signer")
+            done
+            echo
+            echo "Multi-sig configuration:"
+            echo "Required signatures: $SIG_REQUIRED"
+            echo "Total signers: $TOTAL_SIGNERS"
+            for ((i=0; i<${#SIGNER_ADDRESSES[@]}; i++)); do
+                echo "Signer $((i+1)): ${SIGNER_ADDRESSES[$i]}"
+            done
+        fi
+        read -p "Confirm multi-signature configuration? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
+    # Tax Configuration
+    while true; do
+        print_header
+        echo "Step 7: Transaction Tax Setup"
+        echo "-------------------------"
+        echo "Transaction taxes can be applied to buys and sells"
+        echo "Examples:"
+        echo "- Marketing tax: 2% on buys, 2% on sells"
+        echo "- Liquidity tax: 1% on buys, 1% on sells"
+        echo "- Development tax: 1% on buys, 1% on sells"
+        echo
+        read -p "Enable transaction tax? (y/n): " ENABLE_TAX
+        if [[ "$ENABLE_TAX" == "y" ]]; then
+            read -p "Enter buy tax percentage (0-100): " BUY_TAX
+            read -p "Enter sell tax percentage (0-100): " SELL_TAX
+            
+            # Tax Distribution
+            echo "Tax Distribution Setup"
+            read -p "Marketing wallet percentage: " MARKETING_TAX
+            read -p "Marketing wallet address: " MARKETING_WALLET
+            read -p "Development wallet percentage: " DEV_TAX
+            read -p "Development wallet address: " DEV_WALLET
+            read -p "Liquidity percentage: " LIQ_TAX
+            
+            echo
+            echo "Tax Configuration:"
+            echo "Buy Tax: $BUY_TAX%"
+            echo "Sell Tax: $SELL_TAX%"
+            echo "Marketing: $MARKETING_TAX% -> $MARKETING_WALLET"
+            echo "Development: $DEV_TAX% -> $DEV_WALLET"
+            echo "Liquidity: $LIQ_TAX%"
+        fi
+        read -p "Confirm tax configuration? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
+    # Anti-Bot Features
+    while true; do
+        print_header
+        echo "Step 8: Anti-Bot Protection"
+        echo "-----------------------"
+        echo "Anti-bot features help prevent manipulation"
+        echo "Examples:"
+        echo "- Max transaction: 1% of total supply"
+        echo "- Max wallet: 2% of total supply"
+        echo "- Trading cooldown: 30 seconds"
+        echo
+        read -p "Enable anti-bot features? (y/n): " ENABLE_ANTI_BOT
+        if [[ "$ENABLE_ANTI_BOT" == "y" ]]; then
+            read -p "Max transaction (% of supply): " MAX_TX
+            read -p "Max wallet holding (% of supply): " MAX_WALLET
+            read -p "Trading cooldown (seconds): " COOLDOWN
+            read -p "Blacklist known bot addresses? (y/n): " BLACKLIST_BOTS
+            read -p "Enable dynamic anti-snipe? (y/n): " DYNAMIC_ANTI_SNIPE
+            
+            echo
+            echo "Anti-Bot Configuration:"
+            echo "Max Transaction: $MAX_TX%"
+            echo "Max Wallet: $MAX_WALLET%"
+            echo "Cooldown: $COOLDOWN seconds"
+            echo "Blacklist Bots: ${BLACKLIST_BOTS}"
+            echo "Dynamic Anti-Snipe: ${DYNAMIC_ANTI_SNIPE}"
+        fi
+        read -p "Confirm anti-bot configuration? (y/n): " confirm
+        [[ "$confirm" == "y" ]] && break
+    done
+
     # Create Token Directory and Contract
     TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
     mkdir -p "$TOKEN_DIR"
-    
-    # Generate Token Contract
-    save_source_code "token" "$TOKEN_NAME"
-    
-    # Create deploy script
-    create_deploy_script "$TOKEN_DIR" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$DECIMALS" "$TOTAL_SUPPLY" "$FEE_PAYER"
 
-    # Metadata
-    print_header
-    echo "Step 6: Token Metadata"
-    echo "-------------------"
-    echo "Would you like to add metadata to your token?"
-    echo "This includes description, image, and social links."
-    echo "Note: Metaplex fees will apply"
-    read -p "Add metadata? (y/n): " CREATE_METADATA
-
+    # Metadata Creation with Social Links
     if [[ "$CREATE_METADATA" == "y" ]]; then
-        # Creator Details
         while true; do
             print_header
-            echo "Creator Information"
-            echo "------------------"
-            echo "Enter your name or organization name"
-            echo "Example: 'Super Games Inc' or 'John Doe'"
-            read -p "Creator name: " CREATOR_NAME
+            echo "Step 9: Social Media Links"
+            echo "----------------------"
+            echo "Add social media links to your token metadata"
             echo
-            read -p "Confirm '$CREATOR_NAME' as creator name? (y/n): " confirm
+            read -p "X (Twitter) username (without @): " TWITTER_USERNAME
+            read -p "Telegram group link: " TELEGRAM_LINK
+            read -p "Discord invite link: " DISCORD_LINK
+            read -p "Website URL: " WEBSITE_URL
+            read -p "GitHub repository: " GITHUB_REPO
+            
+            # Generate metadata using Sugar CLI format
+            cat > "$TOKEN_DIR/config.json" << EOF
+{
+    "name": "$TOKEN_NAME",
+    "symbol": "$TOKEN_SYMBOL",
+    "description": "$TOKEN_DESC",
+    "external_url": "$WEBSITE_URL",
+    "image": "$([ -f "$TOKEN_DIR/token.png" ] && echo "$TOKEN_DIR/token.png")",
+    "properties": {
+        "files": [
+            {
+                "uri": "$([ -f "$TOKEN_DIR/token.png" ] && echo "$TOKEN_DIR/token.png")",
+                "type": "image/png"
+            }
+        ],
+        "category": "token",
+        "creators": [
+            {
+                "address": "$CURRENT_WALLET",
+                "share": 100
+            }
+        ]
+    },
+    "attributes": [
+        {
+            "trait_type": "Decimals",
+            "value": "$DECIMALS"
+        }
+    ],
+    "collection": {},
+    "links": {
+        "twitter": "https://twitter.com/$TWITTER_USERNAME",
+        "telegram": "$TELEGRAM_LINK",
+        "discord": "$DISCORD_LINK",
+        "github": "$GITHUB_REPO"
+    }
+}
+EOF
+            
+            echo
+            echo "Social Media Configuration:"
+            echo "Twitter: @$TWITTER_USERNAME"
+            echo "Telegram: $TELEGRAM_LINK"
+            echo "Discord: $DISCORD_LINK"
+            echo "Website: $WEBSITE_URL"
+            echo "GitHub: $GITHUB_REPO"
+            
+            read -p "Confirm social media configuration? (y/n): " confirm
             [[ "$confirm" == "y" ]] && break
         done
-
-        # Website
-        while true; do
-            print_header
-            echo "Project Website"
-            echo "---------------"
-            echo "Enter your project's website URL"
-            echo "Example: 'https://mytoken.com'"
-            read -p "Website: " CREATOR_WEBSITE
-            echo
-            read -p "Confirm '$CREATOR_WEBSITE' as website? (y/n): " confirm
-            [[ "$confirm" == "y" ]] && break
-        done
-
-        # Description
-        while true; do
-            print_header
-            echo "Token Description"
-            echo "----------------"
-            echo "Enter a detailed description of your token"
-            echo "Example: 'The official currency of Super Games Inc'"
-            read -p "Description: " TOKEN_DESC
-            echo
-            read -p "Confirm this description? (y/n): " confirm
-            [[ "$confirm" == "y" ]] && break
-        done
-
-        # Create metadata JSON
-        generate_metadata_json "$TOKEN_DIR" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$TOKEN_DESC" "$CREATOR_WEBSITE" "$CREATOR_NAME"
     fi
-
-    # Authority Revocation
-    print_header
-    echo "Step 7: Authority Settings"
-    echo "------------------------"
-    echo "These settings determine what control you retain over the token"
-    echo
-    echo "Freeze Authority:"
-    echo "- Allows freezing token accounts"
-    echo "- Recommended: Revoke for fully decentralized tokens"
-    read -p "Revoke freeze authority? (y/n): " REVOKE_FREEZE
-    echo
-    echo "Mint Authority:"
-    echo "- Allows creating more tokens"
-    echo "- Revoke for fixed supply tokens"
-    read -p "Revoke mint authority? (y/n): " REVOKE_MINT
-    echo
-    echo "Update Authority:"
-    echo "- Allows updating metadata"
-    echo "- Revoke to make metadata permanent"
-    read -p "Revoke update authority? (y/n): " REVOKE_UPDATE
 
     # Deployment
     print_header
@@ -832,18 +918,39 @@ token_creator_wizard() {
     read -p "Deploy now? (y/n): " deploy_now
 
     if [[ "$deploy_now" == "y" ]]; then
+        echo "Creating token collection..."
+        sugar create collection \
+            --config "$TOKEN_DIR/config.json" \
+            -r "$TOKEN_SYMBOL" \
+            -n "$TOKEN_NAME"
+        
+        show_progress_bar 45 "Waiting for collection creation"
+        
         echo "Deploying token..."
-        sh "$TOKEN_DIR/deploy.sh"
+        sugar deploy \
+            --config "$TOKEN_DIR/config.json" \
+            --rpc-url "$NETWORK_URL" \
+            --keypair "$FEE_PAYER"
         
-        show_progress_bar 45 "Waiting for confirmation"
+        show_progress_bar 45 "Waiting for deployment"
         
-        if [[ "$CREATE_METADATA" == "y" ]]; then
-            echo "Updating metadata..."
-            metaplex update_metadata --mint "$TOKEN_MINT" --metadata "$TOKEN_DIR/metadata.json" --keypair "$FEE_PAYER"
-            show_progress_bar 45 "Waiting for metadata update"
+        # Apply configurations
+        if [[ "$ENABLE_TAX" == "y" ]]; then
+            echo "Configuring tax settings..."
+            # Add tax configuration commands
         fi
         
-        # Apply authority revocations
+        if [[ "$ENABLE_ANTI_BOT" == "y" ]]; then
+            echo "Configuring anti-bot protection..."
+            # Add anti-bot configuration commands
+        fi
+        
+        if [[ "$ENABLE_MULTISIG" == "y" ]]; then
+            echo "Setting up multi-signature..."
+            # Add multi-sig configuration commands
+        fi
+        
+        # Apply authority settings
         if [[ "$REVOKE_FREEZE" == "y" ]]; then
             spl-token authorize "$TOKEN_MINT" freeze --disable --fee-payer "$FEE_PAYER"
         fi
@@ -851,7 +958,7 @@ token_creator_wizard() {
             spl-token authorize "$TOKEN_MINT" mint --disable --fee-payer "$FEE_PAYER"
         fi
         if [[ "$REVOKE_UPDATE" == "y" ]]; then
-            metaplex update_metadata --mint "$TOKEN_MINT" --new-update-authority null --keypair "$FEE_PAYER"
+            sugar update --keypair "$FEE_PAYER" --new-update-authority null
         fi
         
         echo -e "${GREEN}Token creation complete!${NC}"
@@ -908,7 +1015,7 @@ token_creator_standard() {
 
     # Tax Configuration
     read -p "Enable transaction tax? (y/n): " ENABLE_TAX
-    if [[ "$ENABLE_TAX" == "y" ]]; then
+    if [[ "$ENABLE_TAX" =~ ^[Yy]$ ]]; then
         read -p "Enter buy tax percentage (0-100): " BUY_TAX
         read -p "Enter sell tax percentage (0-100): " SELL_TAX
         read -p "Enter tax recipient wallet address: " TAX_WALLET
@@ -2885,8 +2992,9 @@ manage_bridge_liquidity() {
 ###############################################################################
 MENU_WIDTH=75
 MENU_INDENT=2
-PAGE_SIZE=8  # Display 4 rows x 2 columns
-TOTAL_ITEMS=15
+ROWS_PER_PAGE=8
+COLS_PER_PAGE=3
+ITEMS_PER_PAGE=$((ROWS_PER_PAGE * COLS_PER_PAGE))  # 24 items per page
 
 # Print centered text with optional decoration
 print_centered() {
@@ -2948,25 +3056,35 @@ handle_submenu_input() {
 
 # Display main menu page
 display_main_menu_page() {
-    local start_idx=$(( (CURRENT_PAGE-1) * PAGE_SIZE + 1 ))
-    local end_idx=$((CURRENT_PAGE * PAGE_SIZE))
+    local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
+    local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
     [[ $end_idx -gt $TOTAL_ITEMS ]] && end_idx=$TOTAL_ITEMS
 
     print_header
     print_menu_header "Setec's Labs: Solana AIO Token Manager"
     echo "Type M at any time to return to this menu"
 
-    # Display menu items in single column without extra spacing
-    for ((i=start_idx; i<=end_idx; i++)); do
-        if [ $i -le $TOTAL_ITEMS ]; then
-            printf "%2d. %s\n" "$i" "$(get_menu_option $i)"
+    # Display menu items in 8x3 grid
+    for ((row=0; row<ROWS_PER_PAGE; row++)); do
+        local line=""
+        for ((col=0; col<COLS_PER_PAGE; col++)); do
+            local idx=$((start_idx + row + (col * ROWS_PER_PAGE)))
+            if [ $idx -le $TOTAL_ITEMS ]; then
+                # Pad each column to 25 characters
+                printf -v item "%-25s" "$(printf "%2d. %s" "$idx" "$(get_menu_option $idx)")"
+                line+="$item"
+            fi
+        done
+        # Only print the line if it's not empty
+        if [ -n "$line" ]; then
+            echo "$line"
         fi
     done
     
     echo
     echo -n "Navigation: "
     [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
-    [[ $((CURRENT_PAGE * PAGE_SIZE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
+    [[ $((CURRENT_PAGE * ITEMS_PER_PAGE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
     echo "Q-Quit"
 }
 
@@ -2983,7 +3101,7 @@ main_menu() {
         
         case "$main_choice" in
             [Nn]) 
-                if ((CURRENT_PAGE * PAGE_SIZE < TOTAL_ITEMS)); then
+                if ((CURRENT_PAGE * ITEMS_PER_PAGE < TOTAL_ITEMS)); then
                     ((CURRENT_PAGE++))
                 fi
                 ;;

@@ -467,6 +467,7 @@ create_wallet() {
     print_header
     echo "Creating new wallet..."
     NEW_WALLET=$(solana-keygen new --outfile ~/.config/solana/new_wallet.json --no-bip39-passphrase --force | awk '/pubkey/ {print $NF}')
+    log_action "Wallet" "Created new wallet: $NEW_WALLET"
     echo "New Wallet Address: $NEW_WALLET"
     read -p "Set this as active wallet? (y/n): " set_active
     if [[ "$set_active" == "y" ]]; then
@@ -570,6 +571,7 @@ manage_tokens() {
 # Token Creator Submenu
 ###############################################################################
 token_creator_menu() {
+    log_action "Menu" "Accessed Token Creator Menu"
     print_header
     echo "Token Creator"
     echo "-------------"
@@ -2607,11 +2609,11 @@ print_menu_header() {
     printf "%${MENU_WIDTH}s\n" "" | tr ' ' '-'
 }
 
-# Print menu item with proper formatting
+# Display menu item with proper formatting
 print_menu_item() {
     local number="$1"
     local text="$2"
-    printf "%${MENU_INDENT}s%2d. %-${MENU_WIDTH}s\n" "" "$number" "$text"
+    printf "%${MENU_INDENT}s%2d. %s\n" "" "$number" "$text"
 }
 
 # Display a standard submenu
@@ -2628,7 +2630,6 @@ display_submenu() {
         print_menu_item $i "$opt"
         ((i++))
     done
-    echo
     print_menu_item "M" "Return to Main Menu"
 }
 
@@ -2659,12 +2660,11 @@ display_main_menu_page() {
     print_header
     print_menu_header "Setec's Labs: Solana AIO Token Manager"
     echo "Type M at any time to return to this menu"
-    echo
 
-    # Display menu items in 2 columns
-    for ((i=start_idx; i<=end_idx; i+=2)); do
+    # Display menu items in single column without extra spacing
+    for ((i=start_idx; i<=end_idx; i++)); do
         if [ $i -le $TOTAL_ITEMS ]; then
-            display_menu_row "$i"
+            printf "%2d. %s\n" "$i" "$(get_menu_option $i)"
         fi
     done
     
@@ -2673,45 +2673,9 @@ display_main_menu_page() {
     [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
     [[ $((CURRENT_PAGE * PAGE_SIZE)) -lt $TOTAL_ITEMS ]] && echo -n "N-Next  "
     echo "Q-Quit"
-    echo
 }
 
-# Display a menu row (2 columns)
-display_menu_row() {
-    local start_idx=$1
-    local col_width=38
-    
-    for i in {0..1}; do
-        local item_num=$((start_idx + i))
-        if [ $item_num -le $TOTAL_ITEMS ]; then
-            printf "%2d. %-${col_width}s" "$item_num" "$(get_menu_option $item_num)"
-        fi
-    done
-    echo
-}
-
-# Get menu option text
-get_menu_option() {
-    case $1 in
-        1)  echo "Setup Environment" ;;
-        2)  echo "Wallet Management" ;;
-        3)  echo "Token Creator" ;;
-        4)  echo "Token Manager" ;;
-        5)  echo "NFT Creator" ;;
-        6)  echo "Smart Contract Manager" ;;
-        7)  echo "Advanced Options" ;;
-        8)  echo "Trading & Bot Management" ;;
-        9)  echo "Source Code Manager" ;;
-        10) echo "Documentation Generator" ;;
-        11) echo "Contract Upgrade Tools" ;;
-        12) echo "Custom Token Standards" ;;
-        13) echo "Cross-chain Bridge" ;;
-        14) echo "Security Center" ;;
-        15) echo "Analytics Dashboard" ;;
-        16) echo "Settings" ;;
-        *)  echo "" ;;
-    esac
-}
+# Remove display_menu_row function as we're now using single column format
 
 # Main menu loop
 main_menu() {
@@ -2801,7 +2765,7 @@ setup_environment_menu() {
 print_menu_item() {
     local number="$1"
     local text="$2"
-    printf "%${MENU_INDENT}s%2d. %-${MENU_WIDTH}s\n" "" "$number" "$text"
+    printf "%${MENU_INDENT}s%2d. %s\n" "" "$number" "$text"
 }
 
 # Display a menu row (2 columns)
@@ -2812,10 +2776,9 @@ display_menu_row() {
     for i in {0..1}; do
         local item_num=$((start_idx + i))
         if [ $item_num -le $TOTAL_ITEMS ]; then
-            printf "%2d. %-${col_width}s" "$item_num" "$(get_menu_option $item_num)"
+            printf "%2d. %s\n" "$item_num" "$(get_menu_option $item_num)"
         fi
     done
-    echo
 }
 
 # Get menu option text

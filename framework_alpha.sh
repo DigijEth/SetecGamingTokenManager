@@ -43,6 +43,13 @@ CURRENT_PAGE=1
 ITEMS_PER_PAGE=15  # 5 items x 3 columns
 MAX_ITEMS=30  # Adjust based on total menu items
 
+# Add these new variables
+ACTIVE_TOKEN=""
+ACTIVE_TOKEN_NAME=""
+ACTIVE_SOL_BALANCE="0"
+ACTIVE_USD_VALUE="0"
+ACTIVE_SNS_DOMAIN=""
+
 ###############################################################################
 # Utility Functions
 ###############################################################################
@@ -51,6 +58,32 @@ print_header() {
     echo -e "${GREEN}---------------------------------------------------------------"
     echo -e "| Setec Gaming Labs Presents: Setec Solana Token Manager       |"
     echo -e "---------------------------------------------------------------${NC}"
+    
+    # Display wallet information if available
+    if [[ -n "${ACTIVE_WALLET:-}" ]]; then
+        if [[ -n "${ACTIVE_SNS_DOMAIN:-}" ]]; then
+            echo -e "Wallet: ${GREEN}${ACTIVE_SNS_DOMAIN}${NC} (${ACTIVE_WALLET:0:8}...${ACTIVE_WALLET: -8})"
+        else
+            echo -e "Wallet: ${GREEN}${ACTIVE_WALLET:0:8}...${ACTIVE_WALLET: -8}${NC}"
+        fi
+        
+        # Get and display SOL balance
+        ACTIVE_SOL_BALANCE=$(solana balance | awk '{print $1}')
+        # Get SOL price in USD (simplified example - you would need to implement actual price fetching)
+        SOL_PRICE=$(curl -s "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd" | jq -r '.solana.usd')
+        ACTIVE_USD_VALUE=$(echo "$ACTIVE_SOL_BALANCE * $SOL_PRICE" | bc)
+        
+        echo -e "Balance: ${GREEN}◎${ACTIVE_SOL_BALANCE}${NC} (\$${ACTIVE_USD_VALUE})"
+        
+        # Display active token if selected
+        if [[ -n "${ACTIVE_TOKEN:-}" && -n "${ACTIVE_TOKEN_NAME:-}" ]]; then
+            TOKEN_BALANCE=$(spl-token balance "$ACTIVE_TOKEN" 2>/dev/null || echo "0")
+            echo -e "Selected Token: ${GREEN}${ACTIVE_TOKEN_NAME}${NC} (${TOKEN_BALANCE} tokens)"
+        fi
+    else
+        echo "No wallet connected"
+    fi
+    echo "---------------------------------------------------------------"
 }
 
 pause() {
@@ -977,10 +1010,6 @@ main_menu() {
                 "$(get_menu_item $i)" \
                 "$(get_menu_item $((i+1)))" \
                 "$(get_menu_item $((i+2)))"
-            printf "%-25s %-25s %-25s\n" \
-                "$(get_menu_tooltip $i)" \
-                "$(get_menu_tooltip $((i+1)))" \
-                "$(get_menu_tooltip $((i+2)))"
             echo ""
         done
         
@@ -1039,26 +1068,64 @@ get_menu_item() {
     esac
 }
 
-get_menu_tooltip() {
-    local idx=$1
-    case $idx in
-        1)  echo "    Configure environment and dependencies" ;;
-        2)  echo "    Manage wallets and connections" ;;
-        3)  echo "    Create and configure new tokens" ;;
-        4)  echo "    Manage existing tokens" ;;
-        5)  echo "    Create and manage NFTs" ;;
-        6)  echo "    Deploy and manage smart contracts" ;;
-        7)  echo "    Advanced protocol features" ;;
-        8)  echo "    Trading bots and automation" ;;
-        9)  echo "    Manage contract source code" ;;
-        10) echo "    Generate documentation" ;;
-        11) echo "    Upgrade contract tools" ;;
-        12) echo "    Custom token standard tools" ;;
-        13) echo "    Cross-chain bridge operations" ;;
-        14) echo "    Security and access control" ;;
-        15) echo "    View analytics and metrics" ;;
-        *) echo "" ;;
-    esac
+display_menu_row() {
+    local start_idx=$1
+    printf "%-25s %-25s %-25s\n" \
+        "$([ -n "$(get_menu_item "$start_idx")" ] && echo "$start_idx. $(get_menu_item "$start_idx")")" \
+        "$([ -n "$(get_menu_item "$((start_idx+1))")" ] && echo "$((start_idx+1)). $(get_menu_item "$((start_idx+1))")")" \
+        "$([ -n "$(get_menu_item "$((start_idx+2))")" ] && echo "$((start_idx+2)). $(get_menu_item "$((start_idx+2))")")"
+}
+
+main_menu() {
+    while true; do
+        print_header
+        echo
+        
+        # Calculate page bounds
+        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
+        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
+        
+        # Display menu in 3 columns
+        for ((i=start_idx; i<=end_idx; i+=3)); do
+            display_menu_row "$i"
+        done
+        
+        echo
+        echo "N. Next Page    P. Previous Page    Q. Quit"
+        echo
+        
+        read -p "Enter your choice: " main_choice
+        # ...existing menu case statement code...
+    done
+}
+
+# Add this function to update token display names
+update_token_display_name() {
+    local token_address="$1"
+    # Try to get token name from SPL token metadata
+    local token_name
+    token_name=$(spl-token display "$token_address" 2>/dev/null | grep "Name:" | awk '{print $2}')
+    
+    # If no name found, try to get from known tokens list
+    if [[ -z "$token_name" ]]; then
+        # This is a simplified example - you would need to implement a proper token name lookup
+        token_name=$(curl -s "https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json" | \
+                    jq -r ".tokens[] | select(.address==\"$token_address\") | .name" 2>/dev/null)
+    fi
+    
+    # If still no name found, use shortened address
+    if [[ -z "$token_name" ]]; then
+        token_name="${token_address:0:8}...${token_address: -8}"
+    fi
+    
+    ACTIVE_TOKEN="$token_address"
+    ACTIVE_TOKEN_NAME="$token_name"
+}
+
+# Modify token selection functions to use token names
+select_token() {
+    # ...existing token selection code...
+    update_token_display_name "$selected_token"
 }
 
 ###############################################################################
@@ -2507,28 +2574,6 @@ get_menu_title() {
     esac
 }
 
-get_menu_tooltip() {
-    local idx=$1
-    case $idx in
-        1)  echo "Configure environment and dependencies" ;;
-        2)  echo "Manage wallets and connections" ;;
-        3)  echo "Create and configure new tokens" ;;
-        4)  echo "Manage existing tokens" ;;
-        5)  echo "Create and manage NFTs" ;;
-        6)  echo "Deploy and manage smart contracts" ;;
-        7)  echo "Advanced protocol features" ;;
-        8)  echo "Trading bots and automation" ;;
-        9)  echo "Manage contract source code" ;;
-        10) echo "Generate documentation" ;;
-        11) echo "Upgrade contract tools" ;;
-        12) echo "Custom token standard tools" ;;
-        13) echo "Cross-chain bridge operations" ;;
-        14) echo "Security and access control" ;;
-        15) echo "View analytics and metrics" ;;
-        *) echo "" ;;
-    esac
-}
-
 display_menu_item() {
     local number=$1
     local title
@@ -2538,27 +2583,12 @@ display_menu_item() {
     fi
 }
 
-display_menu_tooltip() {
-    local number=$1
-    local tooltip
-    tooltip=$(get_menu_tooltip "$number")
-    if [ -n "$tooltip" ]; then
-        printf "    %-30s" "$tooltip"
-    fi
-}
-
 display_menu_row() {
     local start_idx=$1
     # Display menu items
     display_menu_item "$start_idx"
     display_menu_item "$((start_idx+1))"
     display_menu_item "$((start_idx+2))"
-    echo
-    # Display tooltips
-    display_menu_tooltip "$start_idx"
-    display_menu_tooltip "$((start_idx+1))"
-    display_menu_tooltip "$((start_idx+2))"
-    echo
     echo
 }
 

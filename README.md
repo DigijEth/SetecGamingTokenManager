@@ -1,5 +1,7 @@
 **Update:** In the latest release, anti-bot features have been removed from token creation. This is only temporary as we add some new features and update our Metaplex functions. I apologize for the inconvenience.
 
+If framework.sh gives you an error, please try framework_rc.sh
+
 **Setec Gaming Lab's
 – All-In-One Token Creator**
 

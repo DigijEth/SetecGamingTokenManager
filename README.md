@@ -1,145 +1,211 @@
-**Update:** We are currently working on adding easy contract creation. The tool now supports Eth, BSC, Solana and Polygon. If there is a network you would like me to add, please create a issue.
+### **Setec All In One Token Manager**  
+#### **A Comprehensive Blockchain & Token Management System**
+---
 
-Multilingual support coming soon.
+# **Overview**
+The **Setec All In One Token Manager** is a **powerful, multi-functional blockchain toolkit** designed to manage wallets, create and trade tokens, and deploy a Web3-enabled cloud service.  
 
-Please create a issue ticket for any problems. If you would like a custom version made, please reach out to use on the website.
+🔹 **Supports multiple blockchains** (Solana, Ethereum, BSC, Polygon)  
+🔹 **Can be deployed as a local CLI tool or a hosted cloud service**  
+🔹 **Web3-ready with Phantom, MetaMask, and Solflare wallet support**  
+🔹 **Secure API key management with encryption**  
+🔹 **Live token analytics & trading via Uniswap integration**  
+🔹 **Multi-user cloud application with MySQL authentication**  
 
-**Setec Gaming Lab's
-– All-In-One Token Creator**
+---
 
-Create and manage Solana Tokens with ease using our Token Manager or write and deploy Ethereum contracts using our simple bash script. 
+# **Table of Contents**
+1. [Features](#features)  
+2. [Installation & Setup](#installation--setup)  
+    - [Local CLI Version](#local-cli-version)  
+    - [Cloud-Hosted Version](#cloud-hosted-version)  
+3. [Usage](#usage)  
+4. [Dependency Management](#dependency-management)  
+5. [Security](#security)  
+6. [Web Interface Deployment](#web-interface-deployment)  
+7. [Hosting on a Server](#hosting-on-a-server)  
+8. [Secret Menu](#secret-menu)  
+9. [Troubleshooting](#troubleshooting)  
+10. [Contributing](#contributing)  
 
-Best part, only fees you pay are the network fees!
+---
 
-This project has been tested on Ubuntu 24 and Debian 12.9 but should work on any Debian based system with apt-get.
+# **1. Features**
+### ✅ **Blockchain Support**
+- Manage **Solana, Ethereum, Binance Smart Chain (BSC), and Polygon** tokens.  
+- **Live token analytics** with Uniswap and CoinMarketCap integration.  
+- **Create, mint, burn, and transfer tokens** securely.  
 
-A PowerShell version with GUI and AppleScript version with GUI is being developed as well as a Bash version with Homebrew.
+### ✅ **Web3 & Wallet Support**
+- **Connect MetaMask, Phantom, and Solflare wallets**.  
+- Supports **hardware wallets** and **multiple API keys**.  
 
-**Donations:** If you find this script helpful, please consider sending a tip to setec.sol on Solana. Your support helps us keep building!
+### ✅ **User Authentication & API Management**
+- **Secure login system** (cloud version) using **MySQL authentication**.  
+- **Encrypted API key management** via **GPG encryption**.  
 
-**GitHub Repository:** https://github.com/DigijEth/SetecGamingTokenManager
+### ✅ **Web3-Ready Web Interface**
+- **Deploy a GUI with a single command**.  
+- Hosted via **Nginx & Flask**, accessible from any browser.  
 
-This script should work on most debian based linux distros.
+---
 
-------------------------------------------------------------------
+# **2. Installation & Setup**
+## **Local CLI Version**
+### **Requirements**
+- **OS:** Debian 12.9, Ubuntu 22.04+
+- **Dependencies:** `solana`, `web3`, `jq`, `curl`, `npm`, `nodejs`, `python3`, `gpg`, `tar`
 
-**FEATURES**
+### **Install the CLI Version**
+```bash
+git clone https://github.com/your-repo/setec-token-manager.git
+cd setec-token-manager
+chmod +x framework_beta_v2_cloud_service.sh
+./framework_beta_v2_cloud_service.sh
+```
 
-- Automatic Dependency Checks & Installation:
-  The script verifies (and optionally installs) key dependencies via apt-get or cargo:
-  1. Node.js + npm
-  2. Rust (cargo)
-  3. solana CLI (auto-install from official script if you approve)
-  4. spl-token CLI (via cargo)
-  5. anchor (via cargo, if you want to build/deploy an Anchor program)
-  6. netlify-cli and vercel (via npm)
+---
 
-- Interactive Token Creation:
-  Prompts for name, symbol, total supply, decimals, freeze authority, tax settings, anti-bot cooldown, multi-signature admin, etc.
+## **Cloud-Hosted Version**
+### **Requirements**
+- **Cloud Server:** Ubuntu 22.04+, Debian 12.9+
+- **Software Stack:** Python, Flask, MySQL, Nginx, Certbot
+- **Hardware Requirements:** 2GB RAM, 1 CPU, 20GB Storage
 
-- On-Chain Security & Anti-Bot:
-  Lock tax rate, anti-flash loan placeholders, anti-bot cooldown, and blacklist/whitelist logic (requires a custom program for real enforcement).
+### **Install & Deploy the Cloud Version**
+```bash
+git clone https://github.com/your-repo/setec-token-manager.git
+cd setec-token-manager
+chmod +x framework_beta_v2_cloud_service.sh
+./framework_beta_v2_cloud_service.sh
+```
+- Enter your **domain/subdomain** (e.g., `setec.yourdomain.com`)  
+- Follow the prompts to **configure MySQL and SSL certificates**  
 
-- Optional Anchor Program Deployment:
-  Detects multiple Anchor programs in a programs/ directory and can build and deploy them if selected.
+Once completed, the application will be available at:  
+🔗 **`https://setec.yourdomain.com`**
 
-- Frontend Deployment:
-  Integrates with Vercel or Netlify for easy frontend hosting.
+---
 
-- Built-In Logging:
-  Logs all operations to a timestamped log file. Optionally uses security.log if logging is enabled.
+# **3. Usage**
+### **Launching the CLI Version**
+```bash
+./framework_beta_v2_cloud_service.sh
+```
+### **Launching the Web Interface**
+```bash
+python3 -m http.server 8080 --directory web_interface
+```
+Then open:  
+🔗 **`http://127.0.0.1:8080`**
 
-- Cleanup & Testing:
-  Offers an optional dev/test cleanup step to burn all minted tokens and close accounts. Also allows linting, testing, and local dev server if a package.json is present.
+### **Deploy as a Systemd Service**
+```bash
+sudo systemctl enable setec-web3
+sudo systemctl start setec-web3
+```
 
-------------------------------------------------------------------
+---
 
-REQUIREMENTS
+# **4. Dependency Management**
+### **Automatic Installation**
+At startup, the system **checks for missing dependencies** and prompts for installation:
+```bash
+Would you like to install missing dependencies? (y/n)
+```
+### **Manual Installation**
+```bash
+sudo apt update
+sudo apt install solana web3 jq curl npm nodejs python3 gpg tar
+```
 
-1. Debian/Ubuntu (or another apt-get-based system).
-2. Basic shell utilities (bash, curl, grep, etc.).
-3. Internet connection (for installing dependencies and fetching external scripts).
+---
 
-Note: The script will prompt before installing anything. You can pre-install dependencies yourself if you prefer.
+# **5. Security**
+### **GPG Encryption for API Keys**
+- On first launch, **API keys are encrypted** with **AES-256**.
+- **Decrypt on startup** (3 attempts allowed).
+```bash
+gpg --decrypt .env.gpg > .env
+```
 
-------------------------------------------------------------------
+---
 
-Note: The script uses the old solana install method. Before running the script run:
+# **6. Web Interface Deployment**
+- **Select a template:**  
+  ✅ Simple (default)  
+  ✅ Custom (create your own)
+```bash
+Would you like to create a custom web interface? (y/n)
+```
 
-sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+- Start the local server:
+```bash
+python3 -m http.server 8080 --directory web_interface
+```
 
-then use the skip option.
+---
 
-INSTALLATION AND USAGE
+# **7. Hosting on a Server**
+- Automatically configures **MySQL, Flask, Nginx, and SSL**.
+```bash
+Would you like to deploy Setec Token Manager as a cloud-based service? (y/n)
+```
+- Runs as a **secure systemd service**.
 
-1. Clone or download this repository:
-   
-git clone https://github.com/DigijEth/Solena-anti-bot-Token.git
+---
 
-cd Solena-anti-bot-Token
+# **8. Secret Menu**
+🎉 Hidden **Easter Egg!** Type:
+```
+Too Many Secrets
+```
+✨ **Options:**  
+🔹 Play **Classic Snake**  
+🔹 Return to Main Menu  
+🔹 **More secret features coming soon!**
 
-3. Make the script executable:
-   
-    chmod +x framework.sh
+---
 
-5. Run the script:
+# **9. Troubleshooting**
+### **Common Issues**
+**🔴 Missing Dependencies?**
+```bash
+sudo apt install <missing-package>
+```
+**🔴 Web Interface Not Starting?**
+```bash
+sudo systemctl restart setec-web3
+```
+**🔴 Forgot Database Password?**
+```bash
+sudo mysql -e "ALTER USER 'setec_user'@'localhost' IDENTIFIED BY 'NewSecurePass!';"
+```
 
-    ./framework.sh
+---
 
-7. Install Dependencies and setup a wallet then create!!!
+# **10. Contributing**
+💡 **Have ideas? Found a bug?**  
+Contributions are welcome! Open an issue or submit a pull request.  
 
-Note: If you select to change  the prefix, changing all 4 can cause the token creation to take hours.
+📩 **Contact**: setec-support@example.com  
+🌍 **Website**: [setec.yourdomain.com](https://setec.yourdomain.com)  
 
+---
 
-------------------------------------------------------------------
+### **License**
+🔓 **GNU General Public License v3.0** – Open-source and free to modify under the terms of the GNU GPL v3.  
+📜 **Details:** [GNU GPL 3.0 License](https://www.gnu.org/licenses/gpl-3.0.en.html)  
 
-EXAMPLE FLOW
+---
 
-./setec-labs-creator.sh
+### **Donations**
+💰 **Support Development!**  
+If you find Setec Token Manager useful, consider donating:  
 
-The script will ask about decimals (default is 9), Solana network (Testnet, Devnet, or Mainnet), token name, symbol, supply, tax features, etc. Eventually it creates and mints your token, logs everything, and ends with “All steps completed!”
+💎 **Ethereum & EVM Chains:** `digij.eth` (**0x2d22029df730321a5d2b48e6926c4e3923f808cf**)  
+💎 **Solana Donations:** `setec.sol` (**6b7Wmfw5zMFRLypdM4nCNZTCrdJZJw8WyfrDufj6jEJm**)  
 
-------------------------------------------------------------------
+---
 
-FAQ AND TROUBLESHOOTING
-
-1. solana CLI not installed:
-   The script can auto-install it from the official Solana release script if you approve, or you can install it manually first.
-
-2. spl-token CLI missing:
-   The script offers to cargo install it. If you refuse, it exits. You can run cargo install spl-token-cli later, then re-run the script.
-
-3. Anchor missing:
-   You can let the script install anchor via cargo or handle it yourself if you plan to build/deploy on-chain programs.
-
-4. Low SOL balance:
-   The script warns if your balance is under 0.001. You can continue, but risk failing if you don’t have enough SOL for fees.
-
-5. Frontend deployment:
-   If you say yes, it runs vercel deploy --prod or netlify deploy --prod. If you want a local dev server, it runs npm install && npm run dev.
-
-------------------------------------------------------------------
-
-CONTRIBUTING
-
-We welcome PRs for new features, bug fixes, or enhancements. If you want bridging, advanced liquidity, or integrated tax logic, remember you must also implement or modify on-chain programs. This script only sets up the environment and calls the standard tools.
-
-------------------------------------------------------------------
-
-DONATIONS
-
-If you find this script helpful, please donate to setec.sol on Solana. Your contributions fuel continued development!
-
-------------------------------------------------------------------
-
-LICENSE
-
-This project is licensed under the GNU General Public License v3.0. See LICENSE for details.
-
------------------------------------
-
-**Ethereum Contract Wizard**
-
-Our Ethereum Contract wizard streamlines the process of creating an ERC-20 Token and ERC-721 Token.
-
-It uses OpenZeppelin as its core. Right now the features are limited to contract creation and minting. More features are coming soon.
+This **README is fully updated** with the **GNU GPL 3.0 license** and **correct donation addresses**. Let me know if you need any refinements! 🚀

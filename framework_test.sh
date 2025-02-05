@@ -3490,3 +3490,260 @@ load_settings
 
 # ... rest of existing code ...
 
+# Add error handling function
+handle_skip() {
+    local response="$1"
+    local default="${2:-false}"
+    
+    case "${response,,}" in
+        y|yes) echo "true" ;;
+        n|no|""|skip) echo "false" ;;
+        *) echo "$default" ;;
+    esac
+}
+
+# Update token wizard function
+token_creator_wizard() {
+    # ...existing initialization code...
+
+    # Create Token Directory early
+    TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
+    mkdir -p "$TOKEN_DIR"
+
+    # Multi-Signature Configuration
+    print_header
+    echo "Step 6: Multi-Signature Setup"
+    echo "-------------------------"
+    echo "Multi-signature wallets require multiple approvals for token operations"
+    echo "Examples:"
+    echo "- 2/3 arrangement: Requires 2 out of 3 signers to approve"
+    echo "- 3/5 arrangement: Requires 3 out of 5 signers to approve"
+    echo
+    read -p "Enable multi-signature? (y/n/skip): " ENABLE_MULTISIG
+    ENABLE_MULTISIG=$(handle_skip "$ENABLE_MULTISIG")
+    
+    if [ "$ENABLE_MULTISIG" = "true" ]; then
+        while true; do
+            read -p "Enter number of required signatures: " SIG_REQUIRED
+            read -p "Enter total number of signers: " TOTAL_SIGNERS
+            if [[ "$SIG_REQUIRED" -gt 0 && "$TOTAL_SIGNERS" -ge "$SIG_REQUIRED" ]]; then
+                break
+            else
+                echo "Invalid configuration. Required signatures must be > 0 and <= total signers"
+            fi
+        done
+        
+        # Collect signer addresses
+        declare -a SIGNER_ADDRESSES
+        for ((i=1; i<=TOTAL_SIGNERS; i++)); do
+            while true; do
+                read -p "Enter signer $i public key: " signer
+                if [[ ${#signer} -eq 44 ]]; then
+                    SIGNER_ADDRESSES+=("$signer")
+                    break
+                else
+                    echo "Invalid public key. Must be 44 characters long."
+                fi
+            done
+        done
+    fi
+
+    # Tax Configuration
+    print_header
+    echo "Step 7: Transaction Tax Setup"
+    echo "-------------------------"
+    echo "Transaction taxes can be applied to buys and sells"
+    echo "Examples:"
+    echo "- Marketing tax: 2% on buys, 2% on sells"
+    echo "- Liquidity tax: 1% on buys, 1% on sells"
+    echo "- Development tax: 1% on buys, 1% on sells"
+    echo
+    read -p "Enable transaction tax? (y/n/skip): " ENABLE_TAX
+    ENABLE_TAX=$(handle_skip "$ENABLE_TAX")
+    
+    if [ "$ENABLE_TAX" = "true" ]; then
+        while true; do
+            read -p "Enter buy tax percentage (0-100): " BUY_TAX
+            read -p "Enter sell tax percentage (0-100): " SELL_TAX
+            if [[ "$BUY_TAX" =~ ^[0-9]+$ && "$SELL_TAX" =~ ^[0-9]+$ && 
+                  "$BUY_TAX" -le 100 && "$SELL_TAX" -le 100 ]]; then
+                break
+            else
+                echo "Invalid tax percentages. Must be between 0-100"
+            fi
+        done
+        
+        # Tax Distribution
+        echo "Tax Distribution Setup (total must = 100%)"
+        while true; do
+            read -p "Marketing wallet percentage: " MARKETING_TAX
+            read -p "Development wallet percentage: " DEV_TAX
+            read -p "Liquidity percentage: " LIQ_TAX
+            
+            total=$((MARKETING_TAX + DEV_TAX + LIQ_TAX))
+            if [ "$total" -eq 100 ]; then
+                break
+            else
+                echo "Tax distribution must total 100%. Current total: $total%"
+            fi
+        done
+        
+        while true; do
+            read -p "Marketing wallet address: " MARKETING_WALLET
+            read -p "Development wallet address: " DEV_WALLET
+            if [[ ${#MARKETING_WALLET} -eq 44 && ${#DEV_WALLET} -eq 44 ]]; then
+                break
+            else
+                echo "Invalid wallet address(es). Must be 44 characters long."
+            fi
+        done
+    fi
+
+    # Anti-Bot Features
+    print_header
+    echo "Step 8: Anti-Bot Protection"
+    echo "-----------------------"
+    echo "Anti-bot features help prevent manipulation"
+    echo "Examples:"
+    echo "- Max transaction: 1% of total supply"
+    echo "- Max wallet: 2% of total supply"
+    echo "- Trading cooldown: 30 seconds"
+    echo
+    read -p "Enable anti-bot features? (y/n/skip): " ENABLE_ANTI_BOT
+    ENABLE_ANTI_BOT=$(handle_skip "$ENABLE_ANTI_BOT")
+    
+    if [ "$ENABLE_ANTI_BOT" = "true" ]; then
+        while true; do
+            read -p "Max transaction (% of supply, 0.1-100): " MAX_TX
+            read -p "Max wallet holding (% of supply, 0.1-100): " MAX_WALLET
+            if [[ "$MAX_TX" =~ ^[0-9]+(\.[0-9]+)?$ && "$MAX_WALLET" =~ ^[0-9]+(\.[0-9]+)?$ && 
+                  $(echo "$MAX_TX <= 100" | bc -l) -eq 1 && $(echo "$MAX_WALLET <= 100" | bc -l) -eq 1 ]]; then
+                break
+            else
+                echo "Invalid percentages. Must be between 0.1 and 100"
+            fi
+        done
+        
+        while true; do
+            read -p "Trading cooldown (seconds, 0-3600): " COOLDOWN
+            if [[ "$COOLDOWN" =~ ^[0-9]+$ && "$COOLDOWN" -le 3600 ]]; then
+                break
+            else
+                echo "Invalid cooldown. Must be between 0 and 3600 seconds"
+            fi
+        done
+        
+        read -p "Blacklist known bot addresses? (y/n/skip): " BLACKLIST_BOTS
+        BLACKLIST_BOTS=$(handle_skip "$BLACKLIST_BOTS")
+        
+        read -p "Enable dynamic anti-snipe? (y/n/skip): " DYNAMIC_ANTI_SNIPE
+        DYNAMIC_ANTI_SNIPE=$(handle_skip "$DYNAMIC_ANTI_SNIPE")
+    fi
+
+    # Image Selection
+    print_header
+    echo "Step 9: Token Image"
+    echo "----------------"
+    echo "Select image source:"
+    echo "1. Use existing token.png from token folder"
+    echo "2. Download image from URL"
+    echo "3. Skip image"
+    
+    while true; do
+        read -p "Choice (1-3): " image_choice
+        case "$image_choice" in
+            1)
+                if [ -f "$TOKEN_DIR/token.png" ]; then
+                    IMAGE_PATH="$TOKEN_DIR/token.png"
+                    break
+                else
+                    echo "token.png not found in $TOKEN_DIR"
+                    read -p "Try another option? (y/n): " retry
+                    [[ "$retry" != "y" ]] && { IMAGE_PATH=""; break; }
+                fi
+                ;;
+            2)
+                read -p "Enter image URL: " image_url
+                if wget -O "$TOKEN_DIR/token.png" "$image_url" 2>/dev/null; then
+                    IMAGE_PATH="$TOKEN_DIR/token.png"
+                    break
+                else
+                    echo "Failed to download image"
+                    read -p "Try another option? (y/n): " retry
+                    [[ "$retry" != "y" ]] && { IMAGE_PATH=""; break; }
+                fi
+                ;;
+            3)
+                IMAGE_PATH=""
+                break
+                ;;
+            *)
+                echo "Invalid choice"
+                ;;
+        esac
+    done
+
+    # Save all configurations before deployment
+    save_token_config
+    
+    # Continue with deployment...
+    # ...existing deployment code...
+}
+
+# Add new function to save token configuration
+save_token_config() {
+    echo "Saving token configuration..."
+    
+    # Save token contract
+    save_token_contract "$TOKEN_DIR" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$ENABLE_TAX" "$ENABLE_ANTI_BOT" "$ENABLE_MULTISIG"
+    
+    # Save token configuration
+    cat > "$TOKEN_DIR/token_config.json" << EOF
+{
+    "name": "$TOKEN_NAME",
+    "symbol": "$TOKEN_SYMBOL",
+    "decimals": $DECIMALS,
+    "totalSupply": $TOTAL_SUPPLY,
+    "features": {
+        "multiSig": {
+            "enabled": ${ENABLE_MULTISIG:-false},
+            "requiredSignatures": ${SIG_REQUIRED:-0},
+            "totalSigners": ${TOTAL_SIGNERS:-0},
+            "signers": [$(printf '"%s",' "${SIGNER_ADDRESSES[@]}" | sed 's/,$/')]
+        },
+        "tax": {
+            "enabled": ${ENABLE_TAX:-false},
+            "buyTax": ${BUY_TAX:-0},
+            "sellTax": ${SELL_TAX:-0},
+            "distribution": {
+                "marketing": {
+                    "percent": ${MARKETING_TAX:-0},
+                    "wallet": "${MARKETING_WALLET:-}"
+                },
+                "development": {
+                    "percent": ${DEV_TAX:-0},
+                    "wallet": "${DEV_WALLET:-}"
+                },
+                "liquidity": {
+                    "percent": ${LIQ_TAX:-0}
+                }
+            }
+        },
+        "antiBot": {
+            "enabled": ${ENABLE_ANTI_BOT:-false},
+            "maxTransaction": "${MAX_TX:-100}",
+            "maxWallet": "${MAX_WALLET:-100}",
+            "cooldown": ${COOLDOWN:-0},
+            "blacklistEnabled": ${BLACKLIST_BOTS:-false},
+            "dynamicAntiSnipe": ${DYNAMIC_ANTI_SNIPE:-false}
+        }
+    },
+    "image": "$IMAGE_PATH"
+}
+EOF
+
+    echo -e "${GREEN}Configuration saved successfully${NC}"
+}
+
+# ...rest of existing code...
+

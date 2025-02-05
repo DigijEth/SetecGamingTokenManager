@@ -3659,7 +3659,10 @@ token_creator_wizard() {
                 else
                     echo "token.png not found in $TOKEN_DIR"
                     read -p "Try another option? (y/n): " retry
-                    [[ "$retry" != "y" ]] && { IMAGE_PATH=""; break; }
+                    if [[ "$retry" != "y" ]]; then
+                        IMAGE_PATH=""
+                        break
+                    fi
                 fi
                 ;;
             2)
@@ -3670,7 +3673,10 @@ token_creator_wizard() {
                 else
                     echo "Failed to download image"
                     read -p "Try another option? (y/n): " retry
-                    [[ "$retry" != "y" ]] && { IMAGE_PATH=""; break; }
+                    if [[ "$retry" != "y" ]]; then
+                        IMAGE_PATH=""
+                        break
+                    fi
                 fi
                 ;;
             3)
@@ -3683,11 +3689,20 @@ token_creator_wizard() {
         esac
     done
 
-    # Save all configurations before deployment
+    # After the image selection, explicitly continue with configuration save and deployment
+    echo "Proceeding with token creation..."
     save_token_config
     
-    # Continue with deployment...
-    # ...existing deployment code...
+    # Add deployment confirmation
+    read -p "Ready to deploy token. Continue? (y/n): " deploy_confirm
+    if [[ "$deploy_confirm" == "y" ]]; then
+        # Continue with deployment...
+        echo "Deploying token..."
+        # ...existing deployment code...
+    else
+        echo "Token configuration saved but not deployed."
+    fi
+    pause
 }
 
 # Add new function to save token configuration

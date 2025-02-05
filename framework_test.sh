@@ -1526,109 +1526,100 @@ create_dao() {
 # Main Menu
 ###############################################################################
 main_menu() {
+    local menu_options=(
+        "Setup Environment"
+        "Wallet Management"
+        "Token Creator" 
+        "Token Manager"
+        "NFT Creator"
+        "Smart Contract Manager"
+        "Advanced Options"
+        "Trading & Bot Management"
+        "Source Code Manager"
+        "Documentation"
+    )
+
     while true; do
-        print_header
-        echo "Setec's Labs: Solana AIO Token Manager"
-        echo "Type M at any submenu to return here."
-        echo ""
+ 9        display_menu "Main Menu" "${menu_options[@]}"
+        read -p "Enter your choice: " choice
         
-        # Calculate page bounds
-        local start_idx=$(( (CURRENT_PAGE-1) * ITEMS_PER_PAGE + 1 ))
-        local end_idx=$((CURRENT_PAGE * ITEMS_PER_PAGE))
-        
-        # Display menu in 3 columns, 5 items each
-        for ((i=start_idx; i<=end_idx; i+=5)); do
-            printf "%-25s %-25s %-25s\n" \
-                "$(get_menu_item $i)" \
-                "$(get_menu_item $((i+1)))" \
-                "$(get_menu_item $((i+2)))"
-            if [ "$SHOW_TOOLTIPS" = true ]; then
-                printf "%-25s %-25s %-25s\n" \
-                    "$(get_menu_tooltip $i)" \
-                    "$(get_menu_tooltip $((i+1)))" \
-                    "$(get_menu_tooltip $((i+2)))"
-            fi
-            echo ""
-        done
-        
-        echo "N. Next Page    P. Previous Page    Q. Quit"
-        
-        read -p "Enter your choice: " main_choice
-        case "$main_choice" in
-            [Nn]) 
-                if ((CURRENT_PAGE * ITEMS_PER_PAGE < MAX_ITEMS)); then
-                    ((CURRENT_PAGE++))
-                fi
-                ;;
-            [Pp])
-                if ((CURRENT_PAGE > 1)); then
-                    ((CURRENT_PAGE--))
-                fi
-                ;;
-            1) setup_environment_menu ;;
-            2) wallet_management_menu ;;
-            3) token_creator_menu ;;
-            4) token_manager_menu ;;
-            5) nft_creator_menu ;;          # New
-            6) smart_contract_menu ;;       # New
-            7) advanced_options_menu ;;
-            8) trading_menu ;;
-            9) source_code_menu ;;          # New
-            10) documentation_menu ;;       # New
-            11) upgrade_menu ;;             # New
-            12) custom_token_menu ;;        # New
-            13) bridge_menu ;;              # New
-            16) settings_menu ;;            # New
+        case "$choice" in
+            [Nn]) ((CURRENT_PAGE * 10 < ${#menu_options[@]})) && ((CURRENT_PAGE++)) ;;
+            [Pp]) ((CURRENT_PAGE > 1)) && ((CURRENT_PAGE--)) ;;
             [Qq]) echo "Exiting..."; exit 0 ;;
-            *) echo "Invalid selection." ; sleep 1 ;;
+            [Mm]) CURRENT_PAGE=1 ;;
+            [1-9]|10)
+                if ((choice >= 1 && choice <= ${#menu_options[@]})); then
+                    handle_menu_choice "$choice"
+                else
+                    echo "Invalid selection"
+                    sleep 1
+                fi
+                ;;
+            *) echo "Invalid selection"; sleep 1 ;;
         esac
     done
 }
 
-get_menu_item() {
-    local idx=$1
-    case $idx in
-        1)  echo "1. Setup Environment" ;;
-        2)  echo "2. Wallet Management" ;;
-        3)  echo "3. Token Creator" ;;
-        4)  echo "4. Token Manager" ;;
-        5)  echo "5. NFT Creator" ;;
-        6)  echo "6. Smart Contract Manager" ;;
-        7)  echo "7. Advanced Options" ;;
-        8)  echo "8. Trading & Bot Management" ;;
-        9)  echo "9. Source Code Manager" ;;
-        10) echo "10. Documentation Generator" ;;
-        11) echo "11. Contract Upgrade Tools" ;;
-        12) echo "12. Custom Token Standards" ;;
-        13) echo "13. Cross-chain Bridge" ;;
-        14) echo "14. Security Center" ;;
-        15) echo "15. Analytics Dashboard" ;;
-        16) echo "16. Settings" ;;
-        *) echo "" ;;
+# Handle menu choices
+handle_menu_choice() {
+    case $1 in
+        1) setup_environment_menu ;;
+        2) wallet_management_menu ;;
+        3) token_creator_menu ;;
+        4) token_manager_menu ;;
+        5) nft_creator_menu ;;
+        6) smart_contract_menu ;;
+        7) advanced_options_menu ;;
+        8) trading_menu ;;
+        9) source_code_menu ;;
+        10) documentation_menu ;;
     esac
 }
 
-get_menu_tooltip() {
-    local idx=$1
-    case $idx in
-        1)  echo "    Configure environment and dependencies" ;;
-        2)  echo "    Manage wallets and connections" ;;
-        3)  echo "    Create and configure new tokens" ;;
-        4)  echo "    Manage existing tokens" ;;
-        5)  echo "    Create and manage NFTs" ;;
-        6)  echo "    Deploy and manage smart contracts" ;;
-        7)  echo "    Advanced protocol features" ;;
-        8)  echo "    Trading bots and automation" ;;
-        9)  echo "    Manage contract source code" ;;
-        10) echo "    Generate documentation" ;;
-        11) echo "    Upgrade contract tools" ;;
-        12) echo "    Custom token standard tools" ;;
-        13) echo "    Cross-chain bridge operations" ;;
-        14) echo "    Security and access control" ;;
-        15) echo "    View analytics and metrics" ;;
-        16) echo "    Configure application settings" ;;
-        *) echo "" ;;
-    esac
+###############################################################################
+# Menu Display Function
+###############################################################################
+display_menu() {
+    local title="$1"
+    shift
+    local options=("$@")
+    local total_items=${#options[@]}
+    local rows=5
+    local cols=2
+    local items_per_page=$((rows * cols))
+
+    print_header
+    echo "$title"
+    echo "------------------------"
+
+    # Calculate start and end indices for current page
+    local start_idx=$(( (CURRENT_PAGE-1) * items_per_page ))
+    local end_idx=$((start_idx + items_per_page))
+    [[ $end_idx -gt $total_items ]] && end_idx=$total_items
+
+    # Display menu items in 5x2 grid
+    for ((row=0; row<rows; row++)); do
+        local line=""
+        for ((col=0; col<cols; col++)); do
+            local idx=$((start_idx + row + (col * rows)))
+            if [ $idx -lt $total_items ]; then
+                # Pad each column to 40 characters
+                printf -v item "%-40s" "$(printf "%2d. %s" "$((idx+1))" "${options[$idx]}")"
+                line+="$item"
+            fi
+        done
+        # Only print non-empty lines
+        if [ -n "$line" ]; then
+            echo "$line"
+        fi
+    done
+
+    echo
+    echo -n "Navigation: "
+    [[ $CURRENT_PAGE -gt 1 ]] && echo -n "P-Previous  "
+    [[ $((CURRENT_PAGE * items_per_page)) -lt $total_items ]] && echo -n "N-Next  "
+    echo "M-Main Menu  Q-Quit"
 }
 
 ###############################################################################

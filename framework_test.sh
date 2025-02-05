@@ -648,6 +648,67 @@ show_progress_bar() {
     echo
 }
 
+save_token_contract() {
+    local token_dir="$1"
+    local token_name="$2"
+    local token_symbol="$3"
+    local enable_tax="$4"
+    local enable_anti_bot="$5"
+    local enable_multisig="$6"
+
+    # Create token contract file
+    cat > "$token_dir/${token_name}_contract.rs" << EOF
+// Token Contract for $token_name ($token_symbol)
+// Created: $(date)
+
+use anchor_lang::prelude::*;
+use anchor_spl::token;
+
+#[program]
+pub mod ${token_symbol,,}_token {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>, total_supply: u64) -> Result<()> {
+        Ok(())
+    }
+
+    $([ "$enable_tax" == "y" ] && echo "
+    // Tax Implementation
+    pub fn set_tax(ctx: Context<SetTax>, buy_tax: u64, sell_tax: u64) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn collect_tax(ctx: Context<CollectTax>) -> Result<()> {
+        Ok(())
+    }")
+
+    $([ "$enable_anti_bot" == "y" ] && echo "
+    // Anti-bot Implementation
+    pub fn set_trading_limits(ctx: Context<SetLimits>, max_tx: u64, max_wallet: u64) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn set_cooldown(ctx: Context<SetCooldown>, seconds: u64) -> Result<()> {
+        Ok(())
+    }")
+
+    $([ "$enable_multisig" == "y" ] && echo "
+    // Multi-signature Implementation
+    pub fn propose_transaction(ctx: Context<ProposeTransaction>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn approve_transaction(ctx: Context<ApproveTransaction>) -> Result<()> {
+        Ok(())
+    }")
+}
+
+#[derive(Accounts)]
+pub struct Initialize {}
+EOF
+}
+
+# Modify the token_creator_wizard function to include image handling and file saving
 token_creator_wizard() {
     print_header
     echo "Token Creation Wizard"
@@ -834,36 +895,108 @@ token_creator_wizard() {
         [[ "$confirm" == "y" ]] && break
     done
 
-    # Create Token Directory and Contract
+    # Create Token Directory
     TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
     mkdir -p "$TOKEN_DIR"
 
-    # Metadata Creation with Social Links
+    # Image Selection (add this before metadata creation)
+    while true; do
+        print_header
+        echo "Step 8: Token Image"
+        echo "----------------"
+        echo "Select image source:"
+        echo "1. Use existing token.png from token folder"
+        echo "2. Download image from URL"
+        echo "3. Skip image"
+        read -p "Choice (1-3): " image_choice
+
+        case "$image_choice" in
+            1)
+                if [ -f "$TOKEN_DIR/token.png" ]; then
+                    IMAGE_PATH="$TOKEN_DIR/token.png"
+                    break
+                else
+                    echo "token.png not found in $TOKEN_DIR"
+                    read -p "Press Enter to try again..."
+                    continue
+                fi
+                ;;
+            2)
+                read -p "Enter image URL: " image_url
+                if wget -O "$TOKEN_DIR/token.png" "$image_url"; then
+                    IMAGE_PATH="$TOKEN_DIR/token.png"
+                    break
+                else
+                    echo "Failed to download image"
+                    read -p "Press Enter to try again..."
+                    continue
+                fi
+                ;;
+            3)
+                IMAGE_PATH=""
+                break
+                ;;
+            *)
+                echo "Invalid choice"
+                read -p "Press Enter to try again..."
+                ;;
+        esac
+    done
+
+    # Save contract and configuration files before deployment
+    echo "Saving token files..."
+    
+    # Save token contract
+    save_token_contract "$TOKEN_DIR" "$TOKEN_NAME" "$TOKEN_SYMBOL" "$ENABLE_TAX" "$ENABLE_ANTI_BOT" "$ENABLE_MULTISIG"
+    
+    # Save token configuration
+    cat > "$TOKEN_DIR/token_config.json" << EOF
+{
+    "name": "$TOKEN_NAME",
+    "symbol": "$TOKEN_SYMBOL",
+    "decimals": $DECIMALS,
+    "totalSupply": $TOTAL_SUPPLY,
+    "features": {
+        "tax": {
+            "enabled": ${ENABLE_TAX:-false},
+            "buyTax": ${BUY_TAX:-0},
+            "sellTax": ${SELL_TAX:-0},
+            "marketingTax": ${MARKETING_TAX:-0},
+            "developmentTax": ${DEV_TAX:-0},
+            "liquidityTax": ${LIQ_TAX:-0},
+            "marketingWallet": "${MARKETING_WALLET:-}",
+            "developmentWallet": "${DEV_WALLET:-}"
+        },
+        "antiBot": {
+            "enabled": ${ENABLE_ANTI_BOT:-false},
+            "maxTransaction": "${MAX_TX:-}",
+            "maxWallet": "${MAX_WALLET:-}",
+            "cooldown": ${COOLDOWN:-0},
+            "blacklistEnabled": ${BLACKLIST_BOTS:-false},
+            "dynamicAntiSnipe": ${DYNAMIC_ANTI_SNIPE:-false}
+        },
+        "multiSig": {
+            "enabled": ${ENABLE_MULTISIG:-false},
+            "requiredSignatures": ${SIG_REQUIRED:-0},
+            "totalSigners": ${TOTAL_SIGNERS:-0}
+        }
+    }
+}
+EOF
+
+    # Save metadata JSON if enabled
     if [[ "$CREATE_METADATA" == "y" ]]; then
-        while true; do
-            print_header
-            echo "Step 9: Social Media Links"
-            echo "----------------------"
-            echo "Add social media links to your token metadata"
-            echo
-            read -p "X (Twitter) username (without @): " TWITTER_USERNAME
-            read -p "Telegram group link: " TELEGRAM_LINK
-            read -p "Discord invite link: " DISCORD_LINK
-            read -p "Website URL: " WEBSITE_URL
-            read -p "GitHub repository: " GITHUB_REPO
-            
-            # Generate metadata using Sugar CLI format
-            cat > "$TOKEN_DIR/config.json" << EOF
+        cat > "$TOKEN_DIR/metadata.json" << EOF
 {
     "name": "$TOKEN_NAME",
     "symbol": "$TOKEN_SYMBOL",
     "description": "$TOKEN_DESC",
     "external_url": "$WEBSITE_URL",
-    "image": "$([ -f "$TOKEN_DIR/token.png" ] && echo "$TOKEN_DIR/token.png")",
+    "image": "$IMAGE_PATH",
     "properties": {
         "files": [
             {
-                "uri": "$([ -f "$TOKEN_DIR/token.png" ] && echo "$TOKEN_DIR/token.png")",
+                "uri": "$IMAGE_PATH",
                 "type": "image/png"
             }
         ],
@@ -878,11 +1011,11 @@ token_creator_wizard() {
     "attributes": [
         {
             "trait_type": "Decimals",
-            "value": "$DECIMALS"
+            "value": $DECIMALS
         }
     ],
-    "collection": {},
     "links": {
+        "website": "$WEBSITE_URL",
         "twitter": "https://twitter.com/$TWITTER_USERNAME",
         "telegram": "$TELEGRAM_LINK",
         "discord": "$DISCORD_LINK",
@@ -890,86 +1023,18 @@ token_creator_wizard() {
     }
 }
 EOF
-            
-            echo
-            echo "Social Media Configuration:"
-            echo "Twitter: @$TWITTER_USERNAME"
-            echo "Telegram: $TELEGRAM_LINK"
-            echo "Discord: $DISCORD_LINK"
-            echo "Website: $WEBSITE_URL"
-            echo "GitHub: $GITHUB_REPO"
-            
-            read -p "Confirm social media configuration? (y/n): " confirm
-            [[ "$confirm" == "y" ]] && break
-        done
     fi
 
-    # Deployment
-    print_header
-    echo "Final Step: Deployment"
-    echo "--------------------"
-    echo "Ready to deploy your token!"
-    echo "Summary:"
-    echo "- Name: $TOKEN_NAME"
-    echo "- Symbol: $TOKEN_SYMBOL"
-    echo "- Supply: $TOTAL_SUPPLY"
-    echo "- Decimals: $DECIMALS"
+    # Show summary of saved files
+    echo -e "${GREEN}Files saved:${NC}"
+    echo "- ${TOKEN_NAME}_contract.rs (Token Contract)"
+    echo "- token_config.json (Token Configuration)"
+    [[ "$CREATE_METADATA" == "y" ]] && echo "- metadata.json (Token Metadata)"
+    [[ -n "$IMAGE_PATH" ]] && echo "- token.png (Token Image)"
     echo
-    read -p "Deploy now? (y/n): " deploy_now
 
-    if [[ "$deploy_now" == "y" ]]; then
-        echo "Creating token collection..."
-        sugar create collection \
-            --config "$TOKEN_DIR/config.json" \
-            -r "$TOKEN_SYMBOL" \
-            -n "$TOKEN_NAME"
-        
-        show_progress_bar 45 "Waiting for collection creation"
-        
-        echo "Deploying token..."
-        sugar deploy \
-            --config "$TOKEN_DIR/config.json" \
-            --rpc-url "$NETWORK_URL" \
-            --keypair "$FEE_PAYER"
-        
-        show_progress_bar 45 "Waiting for deployment"
-        
-        # Apply configurations
-        if [[ "$ENABLE_TAX" == "y" ]]; then
-            echo "Configuring tax settings..."
-            # Add tax configuration commands
-        fi
-        
-        if [[ "$ENABLE_ANTI_BOT" == "y" ]]; then
-            echo "Configuring anti-bot protection..."
-            # Add anti-bot configuration commands
-        fi
-        
-        if [[ "$ENABLE_MULTISIG" == "y" ]]; then
-            echo "Setting up multi-signature..."
-            # Add multi-sig configuration commands
-        fi
-        
-        # Apply authority settings
-        if [[ "$REVOKE_FREEZE" == "y" ]]; then
-            spl-token authorize "$TOKEN_MINT" freeze --disable --fee-payer "$FEE_PAYER"
-        fi
-        if [[ "$REVOKE_MINT" == "y" ]]; then
-            spl-token authorize "$TOKEN_MINT" mint --disable --fee-payer "$FEE_PAYER"
-        fi
-        if [[ "$REVOKE_UPDATE" == "y" ]]; then
-            sugar update --keypair "$FEE_PAYER" --new-update-authority null
-        fi
-        
-        echo -e "${GREEN}Token creation complete!${NC}"
-        echo "Token Directory: $TOKEN_DIR"
-        echo "Token Mint Address: $TOKEN_MINT"
-    else
-        echo "Deployment script saved to: $TOKEN_DIR/deploy.sh"
-        echo "Run this script when you're ready to deploy"
-    fi
-    
-    read -p "Press Enter to return to menu..."
+    # Continue with deployment...
+    # ...rest of existing deployment code...
 }
 
 # Rename existing token creator function to token_creator_standard

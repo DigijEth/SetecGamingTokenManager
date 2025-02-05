@@ -899,50 +899,6 @@ token_creator_wizard() {
     TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
     mkdir -p "$TOKEN_DIR"
 
-    # Image Selection (add this before metadata creation)
-    while true; do
-        print_header
-        echo "Step 8: Token Image"
-        echo "----------------"
-        echo "Select image source:"
-        echo "1. Use existing token.png from token folder"
-        echo "2. Download image from URL"
-        echo "3. Skip image"
-        read -p "Choice (1-3): " image_choice
-
-        case "$image_choice" in
-            1)
-                if [ -f "$TOKEN_DIR/token.png" ]; then
-                    IMAGE_PATH="$TOKEN_DIR/token.png"
-                    break
-                else
-                    echo "token.png not found in $TOKEN_DIR"
-                    read -p "Press Enter to try again..."
-                    continue
-                fi
-                ;;
-            2)
-                read -p "Enter image URL: " image_url
-                if wget -O "$TOKEN_DIR/token.png" "$image_url"; then
-                    IMAGE_PATH="$TOKEN_DIR/token.png"
-                    break
-                else
-                    echo "Failed to download image"
-                    read -p "Press Enter to try again..."
-                    continue
-                fi
-                ;;
-            3)
-                IMAGE_PATH=""
-                break
-                ;;
-            *)
-                echo "Invalid choice"
-                read -p "Press Enter to try again..."
-                ;;
-        esac
-    done
-
     # Save contract and configuration files before deployment
     echo "Saving token files..."
     
@@ -3499,7 +3455,7 @@ token_creator_wizard() {
     echo "Token Creation Wizard"
     echo "-------------------"
 
-    # Step 1: Wallet Selection
+    # Step 1: Wallet Selection 
     print_header
     echo "Step 1: Wallet Selection"
     WALLET_DIR="$HOME/.config/solana"
@@ -3545,49 +3501,13 @@ token_creator_wizard() {
     read -p "Enter Telegram link: " TELEGRAM
     read -p "Enter Discord invite: " DISCORD
 
-    # Step 4: Image Selection
-    print_header
-    echo "Step 4: Image Selection"
+    # Create token directory
     TOKEN_DIR="$SOURCE_CODE_DIR/tokens/${TOKEN_NAME}"
     mkdir -p "$TOKEN_DIR"
-    
-    echo "Select image source:"
-    echo "1. Use existing token.png"
-    echo "2. Download from URL"
-    echo "3. Skip image"
-    
-    while true; do
-        read -p "Choice (1-3): " image_choice
-        case "$image_choice" in
-            1)
-                if [ -f "$TOKEN_DIR/token.png" ]; then
-                    IMAGE_PATH="$TOKEN_DIR/token.png"
-                    break
-                else
-                    echo "token.png not found"
-                    read -p "Try another option? (y/n): " retry
-                    [[ "$retry" != "y" ]] && IMAGE_PATH="" && break
-                fi
-                ;;
-            2)
-                read -p "Enter image URL: " image_url
-                if wget -O "$TOKEN_DIR/token.png" "$image_url" 2>/dev/null; then
-                    IMAGE_PATH="$TOKEN_DIR/token.png"
-                    break
-                else
-                    echo "Failed to download image"
-                    read -p "Try another option? (y/n): " retry
-                    [[ "$retry" != "y" ]] && IMAGE_PATH="" && break
-                fi
-                ;;
-            3) IMAGE_PATH=""; break ;;
-            *) echo "Invalid choice" ;;
-        esac
-    done
 
-    # Step 5: Save Configuration Files
+    # Step 4: Save Configuration Files
     print_header
-    echo "Step 5: Saving Configuration Files"
+    echo "Step 4: Saving Configuration Files"
     
     # Save metadata JSON
     cat > "$TOKEN_DIR/metadata.json" << EOF
@@ -3596,7 +3516,6 @@ token_creator_wizard() {
     "symbol": "$TOKEN_SYMBOL",
     "description": "$TOKEN_DESC",
     "external_url": "$WEBSITE_URL",
-    "image": "$IMAGE_PATH",
     "attributes": [
         {
             "trait_type": "Decimals",
@@ -3612,9 +3531,9 @@ token_creator_wizard() {
 }
 EOF
 
-    # Step 6: Deploy Token
+    # Step 5: Deploy Token
     print_header
-    echo "Step 6: Token Deployment"
+    echo "Step 5: Token Deployment"
     read -p "Ready to deploy token. Continue? (y/n): " deploy_confirm
     if [[ "$deploy_confirm" == "y" ]]; then
         echo "Creating token..."
@@ -3641,9 +3560,9 @@ EOF
             --metadata "$TOKEN_DIR/metadata.json" \
             --keypair "$FEE_PAYER"
 
-        # Authority Management
+        # Step 6: Authority Management
         print_header
-        echo "Step 7: Authority Management"
+        echo "Step 6: Authority Management"
         
         read -p "Revoke mint authority? (y/n): " revoke_mint
         [[ "$revoke_mint" == "y" ]] && \

@@ -1,4 +1,12 @@
+Our web3 React and Firefox Exension will be released shortly will
+all the same features. Please keep in mind this is an early preview,
+and some functions do not fully work. 
 
+Network selection, Wallet Managment and Token Creation Work in the Beta/
+The Alpha has many more options, but is just that, an alpha version.
+
+NOTEL This tool is designed for devs, some features require you to bring
+your own API key.
 
 ## 💝 Donations
 
@@ -71,10 +79,10 @@ git clone https://github.com/DigijEth/SetecGamingTokenManager.git
 cd SetecGamingTokenManager
 
 # Make script executable
-chmod +x framework_alpha.sh
+chmod +x framework_beta.sh
 
 # Run framework
-./framework_alpha.sh'''
+./framework_beta.sh'''
 
 Wiki coming soon
 

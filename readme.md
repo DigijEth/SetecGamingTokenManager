@@ -1,9 +1,8 @@
+
 Our React Web App and stand alone Firefox Exension will be released shortly.
 
 all the same features. Please keep in mind this is an early preview,
-and some functions do not fully work. 
-
-Network selection, Wallet Managment and Token Creation Work in the Beta/
+and some functions do not fully work. Network selection, Wallet Managment and Token Creation Work in the Beta/
 The Alpha has many more options, but is just that, an alpha version.
 
 NOTEL This tool is designed for devs, some features require you to bring

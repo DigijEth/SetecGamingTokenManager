@@ -1,4 +1,4 @@
-Our React Web Apply and stand alone Firefox Exension will be released shortly will.
+Our React Web App and stand alone Firefox Exension will be released shortly will.
 
 all the same features. Please keep in mind this is an early preview,
 and some functions do not fully work. 

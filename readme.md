@@ -1,4 +1,6 @@
 
+With recent concerns about github being used to spread malware, if you decide to play around with our tools feel free to check out the bash code. Everything in this is a shell script and each section is broken down by menu. If you see something, feel free to ask questions.
+
 Our React Web App and stand alone Firefox Exension will be released shortly.
 
 all the same features. Please keep in mind this is an early preview,
